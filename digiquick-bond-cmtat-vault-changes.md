@@ -248,7 +248,7 @@ stateDiagram-v2
 **Aegis**
 
 - [ ] 個人 INVESTOR 申請時，除了指南 §7.2 的四個欄位，Aegis 審核還需要哪些資料或文件（例如證件影本、住址證明）？
-- [ ] CMTAT 3.0.0 的細節（目前指南沒有寫）：部署的 request body、`GRANT_ROLE` 是哪 6 個角色、審計證據、decimals。
+- [ ] CMTAT 3.0.0 的細節（目前指南沒有寫）：部署的 request body、`GRANT_ROLE` 是哪 6 個角色、decimals。
 - [ ] 審核 SLA，以及 dev、stg、主網的交付日期。交割期間付款會陸續到帳，`BATCH_MINT` 會分好幾批送出，需要知道每批從送出到 `COMPLETED` 大約要多久。
 
 **業務**
