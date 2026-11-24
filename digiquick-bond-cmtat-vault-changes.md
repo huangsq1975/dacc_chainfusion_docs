@@ -17,7 +17,7 @@ bond 改成由冷錢包系統部署和操作 CMTAT 合約，DigiQuick 不再持�
 | 登記 | 鏈下持有人登記冊（權威）、三方對帳、記錄日快照 | 提供鏈上持有人、餘額、凍結狀態查詢 |
 | 生命週期 | bond 狀態機、轉讓、修改條款、付息資料、到期贖回 | 暫停、凍結、強制轉移、停用（只能在 Aegis 後台操作） |
 | 送出業務意圖 | 產生 referenceId、送請求、接 webhook、輪詢對帳 | 人工審核、簽名、廣播、記帳 |
-| 私鑰與簽名 | 只有呼叫 API 用的 RSA 金鑰 | 所有錢包的私鑰、離線簽名、gas 支付 |
+| 私鑰與簽名 | 只有呼叫 API 用的 RSA 金鑰 | 所有錢包的私鑰、離線簽名、廣播；gas 從發行方錢包的 CFX 扣（指南 §7.1） |
 
 ## 2. 已定的前提
 
@@ -45,7 +45,7 @@ bond 新增 `issuanceChannel = VAULT_CMTAT` 後，下列程式對 bond 不再使
 | metadata 上傳 IPFS、選 escrow 收款地址 | `core/asset/services/prepare-asset-deployment-service.ts` | 上傳條款 PDF；合約資訊用 `SET_INFORMATION`；收款對象是投資人託管錢包 |
 | gas 價格、手續費 cron、ETH/USD 匯率 | `gas-price-provider.ts`、`cron-update-asset-transaction-fees.ts` | 不需要；改成監控冷錢包錢包的 CFX 餘額 |
 | `Asset.status` 依鏈上交易推導 | `core/asset/models/asset.ts` 的 `get status()` | 加 CMTAT 分支，依 bond 生命週期與冷錢包請求推導（第 6 節） |
-| admin、發行方、第三方用 `signMessage` 簽「資產內容證明」 | `AssetReviewBtn.tsx`、`AssetAcknowledgeBtn.tsx`、`core/asset/services/sign-asset-service.ts` | 建議改成 DigiQuick 內部雙人覆核；內容雜湊值用 `SET_INFORMATION` 寫上鏈 |
+| admin、發行方、第三方用 `signMessage` 簽「資產內容證明」 | `AssetReviewBtn.tsx`、`AssetAcknowledgeBtn.tsx`、`core/asset/services/sign-asset-service.ts` | 改成 DigiQuick 內部雙人覆核；內容雜湊值用 `SET_INFORMATION` 寫上鏈 |
 | 公司登記 MetaMask 地址（KYC 步驟 `ASSIGNING_WALLET_ADDRESS`） | `core/company/services/assign-wallet-address.ts` | 改成等冷錢包建好託管錢包（第 4 節） |
 
 ## 4. 註冊、身份與 KYC
@@ -114,12 +114,12 @@ stateDiagram-v2
     BOOK_CLOSED --> ALLOCATED
     ALLOCATED --> SETTLING
     SETTLING --> ISSUED
-    ISSUED --> ISSUED: 存續期間 BURN_AND_MINT、SET_TERMS
+    ISSUED --> ISSUED: 存續期間 BURN_AND_MINT、SET_TERMS、SET_INFORMATION
     ISSUED --> MATURED
     MATURED --> REDEEMED
 ```
 
-審核中可以被拒絕（`REJECTED`）；截止簿記前發行方可以取消（`CANCELLED`）。下表列出每個狀態的進入條件、送給冷錢包的請求，以及 APP 上誰看得到。
+審核中可以被拒絕（`REJECTED`）；分配確定前（開放認購中或截止簿記後）發行方可以取消（`CANCELLED`）。下表列出每個狀態的進入條件、送給冷錢包的請求，以及 APP 上誰看得到。
 
 | 狀態 | 代碼 | 進入條件 | 冷錢包請求 | APP 誰看得到 |
 | --- | --- | --- | --- | --- |
@@ -154,7 +154,7 @@ stateDiagram-v2
 | --- | --- | --- |
 | 發行方開戶 | `POST /v1/client-requests` kind=ISSUER，再 `POST /v1/clients/{id}/wallets` × 4 | 發行方 KYC 通過 |
 | 個人投資人開戶 | kind=INVESTOR（個人欄位），再建託管錢包 | 投資人 KYC 通過 |
-| 建立債券合約 | 上傳條款 → `cmtat/deployments` → `GRANT_ROLE` × 6（依序）→ 查詢確認角色 | bond 核准後、開放認購前或交割前 |
+| 建立債券合約 | 上傳條款 → `cmtat/deployments` → `GRANT_ROLE` × 6（依序）→ 查詢確認角色 | bond 核准後、開放認購前 |
 | 投資人准入或撤銷 | `BATCH_SET_ALLOWLIST` | 分配確定後；投資人資格失效時關閉 |
 | 交付（付款後交券） | `BATCH_MINT` 到投資人託管錢包 | 付款確認後 |
 | 轉讓、換錢包 | `BURN_AND_MINT` | 轉讓審核通過 |
@@ -265,6 +265,6 @@ stateDiagram-v2
 5. bond 新欄位、`issuanceChannel`、CMTAT 建立流程（條款、部署、角色）。
 6. 認購、分配、付款確認、allowlist、`BATCH_MINT`，以及 APP 的發行方與投資人畫面。
 7. 登記冊、持倉快照與三方對帳；Aegis 後台事件落地。
-8. 存續操作：`BURN_AND_MINT`、`SET_TERMS`；到期贖回 `BATCH_BURN`。
+8. 存續操作：`BURN_AND_MINT`、`SET_TERMS`、`SET_INFORMATION`；到期贖回 `BATCH_BURN`。
 
 第 3 到 6 步可以先在 mock server 上完成，Aegis dev 環境可用後再做端到端驗證。舊版工時估算（`bond-cmtat-aegis-estimate-report.md`）是在「投資人由券商開戶、不做投資人前台」的前提下做的，已不適用本文件的設計。個人投資人註冊、KYC 和 APP 投資人畫面需要重新估算。
