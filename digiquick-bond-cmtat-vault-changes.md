@@ -249,7 +249,7 @@ stateDiagram-v2
 
 - [ ] 個人 INVESTOR 申請時，除了指南 §7.2 的四個欄位，Aegis 審核還需要哪些資料或文件（例如證件影本、住址證明）？
 - [ ] CMTAT 3.0.0 的細節（目前指南沒有寫）：部署的 request body、`GRANT_ROLE` 是哪 6 個角色、decimals。
-- [ ] 審核 SLA，以及 dev、stg、主網的交付日期。交割期間付款會陸續到帳，`BATCH_MINT` 會分好幾批送出，需要知道每批從送出到 `COMPLETED` 大約要多久。
+- [ ] 審核 SLA，以及 dev、stg、主網的交付日期。交割期間付款會陸續到帳，`BATCH_MINT` 會分好幾批送出，需要知道每批從送出到 `COMPLETED` 大約要多久。這項不影響開發，影響的是交割日、付款期限的設定與上線排期。
 
 **業務**
 
@@ -265,7 +265,7 @@ stateDiagram-v2
 ## 11. 建議的實施順序
 
 1. 修 `asset(id)` 權限漏洞，不用等其他決策。
-2. 向 Aegis 確認第 10 節的個人 INVESTOR 需要的資料、CMTAT 3.0.0 細節和審核 SLA；決定個人投資人是否限專業投資者。
+2. 向 Aegis 確認第 10 節的個人 INVESTOR 需要的資料、CMTAT 3.0.0 細節；決定個人投資人是否限專業投資者。
 3. 冷錢包基礎元件：API client、`VaultRequest`、webhook、對帳 cron、mock server。
 4. 註冊入口加個人分支、`Role.INVESTOR`、投資人 KYC、`VAULT_ONBOARDING`（發行方與投資人開戶）。
 5. bond 新欄位、`issuanceChannel`、CMTAT 建立流程（條款、部署、角色）。
