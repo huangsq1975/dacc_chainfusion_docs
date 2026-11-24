@@ -232,7 +232,7 @@ stateDiagram-v2
 
 - [ ] `INVESTOR` 客戶能不能用機構資料申請？指南 v0.6 只有個人欄位。這項決定註冊欄位和 `VaultClient` 的設計，最先確認。
 - [ ] 同一家公司能不能同時是 ISSUER 和 INVESTOR 兩個客戶？
-- [ ] 提供 SPEC.md：部署 request body、`GRANT_ROLE` 的 6 個角色、CMTAT 版本與審計、decimals。
+- [ ] CMTAT 細節（目前指南沒有寫）：部署的 request body、`GRANT_ROLE` 是哪 6 個角色、CMTAT 版本與審計、decimals。
 - [ ] 審核 SLA，以及 dev、stg、主網的交付日期。
 - [ ] CFX gas 由誰出、誰補充。
 
@@ -248,7 +248,7 @@ stateDiagram-v2
 ## 11. 建議的實施順序
 
 1. 修 `asset(id)` 權限漏洞，不用等其他決策。
-2. 向 Aegis 確認第 10 節的前兩項（機構投資人、雙角色），並取得 SPEC.md。
+2. 向 Aegis 確認第 10 節的前三項（機構投資人、雙角色、CMTAT 細節）。
 3. 冷錢包基礎元件：API client、`VaultRequest`、webhook、對帳 cron、mock server。
 4. 註冊與 KYC 分流、`VAULT_ONBOARDING`（發行方與投資人開戶）。
 5. bond 新欄位、`issuanceChannel`、CMTAT 建立流程（條款、部署、角色）。
