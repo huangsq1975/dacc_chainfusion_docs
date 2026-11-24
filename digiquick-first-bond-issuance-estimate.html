@@ -52,8 +52,9 @@
 
 <h1>DigiQuick 首筆數字債券發行：工作範圍、人日與交付時程估算</h1>
 <div class="meta">
-  <div>日期：2026-11-24｜分析與估算：全端工程師、項目經理（兩人先獨立分析，再交換意見三輪後定稿）｜統籌與彙整：主會話</div>
+  <div>日期：2026-11-24｜版本：v2（依「發行營運中樞」定位修訂）｜分析與估算：全端工程師、項目經理（兩人先獨立分析，再交換意見三輪後定稿 v1）｜統籌與彙整：主會話</div>
   <ul>
+    <li><b>v2 修訂說明：</b>DigiQuick 定位為發行營運中樞，只處理簿記配售、身份合規、交割編排、登記、生命週期，以及送出結構化業務意圖。v2 的數字是主會話以兩位隊員定稿的工作包和人日單價重新對照算出的，<b>沒有再經團隊討論</b>。v1 和 v2 的差異見<a href="#s0">「零、定位與修訂差異」</a>。</li>
     <li>依據：<code>digiquick-integration-guide-v0.6.md</code>（下稱「指南」；所述 Aegis 冷錢包 API <b>仍在規劃，尚未實作</b>）、<code>Digital_Asset_Risk_Assessment_Report.md</code>（下稱「OZ 報告」），以及對 digiquick-api / admin / app / contracts 四個 repo 的唯讀核對。</li>
     <li>依據缺口：指南引用的 <code>SPEC.md</code> 不在工作區，因此 CMTAT 部署參數、6 個角色、decimals 等都列為「Aegis 待確認」。</li>
     <li>本輪只做分析與估算，沒有修改任何程式碼。</li>
@@ -67,7 +68,8 @@
 
 <nav>
   <b>目錄</b>
-  <ol>
+  <ol start="0">
+    <li><a href="#s0">定位與修訂差異（v2）</a></li>
     <li><a href="#s1">各階段總表、角色配置與估算假設</a></li>
     <li><a href="#s2">工作量表（A／B／C）、人工步驟與依賴</a></li>
     <li><a href="#s3">改造與從零的對比</a></li>
@@ -76,42 +78,84 @@
   </ol>
 </nav>
 
-<h2 id="s1">一、各階段總表</h2>
+<h2 id="s0">零、定位與修訂差異（v2）</h2>
+
+<h3>職責邊界</h3>
+<div class="table-wrap"><table>
+<thead><tr><th>DigiQuick 負責</th><th>交給 Aegis</th><th>不在範圍內</th></tr></thead>
+<tbody>
+<tr>
+<td>簿記配售、身份合規、交割編排、登記、生命週期、送出結構化業務意圖</td>
+<td>客戶與錢包、簽名與審批、CMTAT 部署與鏈上執行、後台強制操作</td>
+<td>資金收付（人工，平台只記錄憑證）、私鑰託管、合約開發（<code>digiquick-contracts</code> 和 TokenFactory 不動）、自行監聽 CMTAT 鏈上事件、二級市場</td>
+</tr>
+</tbody></table></div>
+<p>「送出結構化業務意圖」是指 DigiQuick 只發出帶 referenceId 的業務指令，例如 <code>CREATE_CLIENT</code>、<code>DEPLOY</code>、<code>GRANT_ROLE</code>、<code>SET_ALLOWLIST</code>、<code>MINT</code>、<code>BURN</code>，並透過 webhook 和輪詢追蹤結果。A 階段的 Aegis client、webhook、輪詢、編排和 mock（A3–A6、A8）就是這一層，所以 <b>A 不變</b>。</p>
+
+<h3>v1 → v2 調整的工作包</h3>
+<div class="table-wrap"><table>
+<thead><tr><th>職責</th><th>v1 估算</th><th>新定位的要求</th><th class="num">B 增量變化（PD）</th></tr></thead>
+<tbody>
+<tr><td><b>簿記配售</b></td><td>admin 代錄申購；分配由安排行出 CSV；APP 只讀</td><td>訂單簿在系統內（下單、修改、撤單、截簿）；在系統內分配並做雙人核准；發出分配通知；投資人可在 APP 下單；發行人在 APP 看即時訂單簿</td><td class="num">B4、B5、B9 合計 +11–17</td></tr>
+<tr><td><b>身份合規</b></td><td>雙角色註冊、KYC 後開 Aegis 戶</td><td>加每檔發行的資格規則（例如只限專業投資者、司法管轄區）；合規通過才能送出 allowlist 意圖</td><td class="num">新增 B5b：+3–5</td></tr>
+<tr><td><b>交割編排</b></td><td>付款記錄、mint 前檢查</td><td>每筆分配都有交割指示和交割狀態機（待付 → 已付已覆核 → 已送 mint 意圖 → 已交付）；處理部分到帳和交割失敗</td><td class="num">新增 B6b：+3–5</td></tr>
+<tr><td><b>登記</b></td><td><code>Holding</code> 表當資料來源</td><td>DigiQuick 作為<b>權威登記冊</b>：變更只追加不改寫；提供登記冊摘錄給發行人和投資人；Aegis holders API 和鏈上只作為比對用的鏡像</td><td class="num">B7：+3–5</td></tr>
+<tr><td><b>生命週期</b></td><td>付息與贖回放在 B 之後的補件（9–15）或 C</td><td>付息日程結構化（現在 <code>paymentDates</code>、<code>dayCount</code> 是自由文字）；固定利率的應得金額計算；記錄日快照；錄入付款憑證；贖回時送 BURN 意圖。要在首次付息前上線</td><td class="num">B 之後的補件改為 15–24；C 減 8–14</td></tr>
+<tr><td>流程設計（非工程）</td><td>—</td><td>簿記規則、登記處作業程序</td><td class="num">B18b：+2–4</td></tr>
+</tbody></table></div>
+
+<h3>v1 與 v2 數字對照（改造口徑）</h3>
+<div class="table-wrap"><table>
+<thead><tr><th>階段</th><th>口徑</th><th class="num">v1</th><th class="num">v2</th></tr></thead>
+<tbody>
+<tr><td>A 技術驗證版</td><td>累計</td><td class="num">54–84</td><td class="num">54–84</td></tr>
+<tr><td>B 首筆正式發行版</td><td>增量</td><td class="num">134–205</td><td class="num">156–241</td></tr>
+<tr class="total"><td>A＋B 首發</td><td>累計</td><td class="num">188–289</td><td class="num">210–325</td></tr>
+<tr><td>生命週期上線（首次付息前）</td><td>增量</td><td class="num">9–15</td><td class="num">15–24</td></tr>
+<tr><td>C 可重複發行版</td><td>增量</td><td class="num">62–100</td><td class="num">54–90</td></tr>
+<tr><td>全案日曆</td><td>—</td><td class="num">20–26 週</td><td class="num">22–29 週</td></tr>
+<tr><td>每新增一筆發行（B 模式）</td><td>營運 PD</td><td class="num">4–9</td><td class="num">3–7</td></tr>
+</tbody></table></div>
+
+<h2 id="s1">一、各階段總表（v2）</h2>
 
 <div class="table-wrap"><table>
 <thead><tr><th>階段</th><th>口徑</th><th class="num">改造 PD</th><th class="num">從零 PD</th><th>角色配置</th><th>日曆週數</th></tr></thead>
 <tbody>
 <tr><td><b>A 技術驗證版</b></td><td>累計</td><td class="num"><b>54–84</b></td><td class="num">70–105</td><td>PM 0.3、BA 0.3、BE 2、FE 0.3、QA 0.3、DevOps 0.1</td><td>用 mock 6–8 週；Aegis dev 可用後再加 2–3 週</td></tr>
-<tr><td><b>B 首筆正式發行版</b></td><td><b>增量</b>（A 之後）</td><td class="num"><b>134–205</b><br><span class="meta">工程 87–134＋非工程 47–71</span></td><td class="num">178–263</td><td>PM 0.5、BA／合規 0.5、BE 2、FE 1.5、QA 1、DevOps 0.2、OPS 0.5–1；峰值約 6 人</td><td>A 結束後 14–20 週（開發 6–9、UAT 3–4、彩排 1–2、發行窗口 2–3、hypercare 2–3，部分重疊）</td></tr>
-<tr class="total"><td>A＋B 首發</td><td><b>累計</b></td><td class="num">188–289</td><td class="num">248–368</td><td>平均 2.5–3 FTE</td><td><b>全案 20–26 週</b>（前提：Aegis dev 在第 6 週左右、主網在第 17–19 週左右可用）</td></tr>
-<tr><td>B 之後的補件</td><td>增量</td><td class="num">9–15</td><td class="num">9–15</td><td>BE</td><td>首次付息或轉讓前完成</td></tr>
-<tr><td><b>C 可重複發行版</b></td><td><b>增量</b>（相對 B）</td><td class="num"><b>62–100</b></td><td class="num">75–120</td><td>BE 2、FE 1、QA 0.5、PM 0.4</td><td>B 的 hypercare 結束後 6–10 週</td></tr>
+<tr><td><b>B 首筆正式發行版</b></td><td><b>增量</b>（A 之後）</td><td class="num"><b>156–241</b><br><span class="meta">工程 107–166＋非工程 49–75</span></td><td class="num">205–305</td><td>PM 0.5、BA／合規 0.5、BE 2、FE 1.5、QA 1、DevOps 0.2、OPS 0.5–1；峰值約 6 人</td><td>A 結束後 16–23 週（開發 8–12、UAT 3–4、彩排 1–2、發行窗口 2–3、hypercare 2–3，部分重疊）</td></tr>
+<tr class="total"><td>A＋B 首發</td><td><b>累計</b></td><td class="num">210–325</td><td class="num">275–410</td><td>平均 2.5–3 FTE</td><td><b>全案 22–29 週</b>（前提：Aegis dev 在第 6 週左右、主網在第 19–22 週左右可用）</td></tr>
+<tr><td>生命週期上線（付息、贖回、BURN_AND_MINT）</td><td>增量</td><td class="num">15–24</td><td class="num">18–28</td><td>BE、FE</td><td>hypercare 期間開發，首次付息前上線</td></tr>
+<tr><td><b>C 可重複發行版</b></td><td><b>增量</b>（相對 B）</td><td class="num"><b>54–90</b></td><td class="num">65–105</td><td>BE 2、FE 1、QA 0.5、PM 0.4</td><td>B 的 hypercare 結束後 6–10 週</td></tr>
 </tbody></table></div>
 
 <h3>每新增一筆發行的營運人日</h3>
 <div class="table-wrap"><table>
-<thead><tr><th>情況</th><th class="num">B 模式（人工）</th><th class="num">C 模式</th></tr></thead>
+<thead><tr><th>情況</th><th class="num">B 模式</th><th class="num">C 模式</th></tr></thead>
 <tbody>
-<tr><td>既有發行人、既有投資人</td><td class="num">4–9 PD</td><td class="num">2–3 PD</td></tr>
-<tr><td>新發行人、20 位以上新投資人</td><td class="num">7–12 PD</td><td class="num">3–5 PD</td></tr>
+<tr><td>既有發行人、既有投資人</td><td class="num">3–7 PD</td><td class="num">2–3 PD</td></tr>
+<tr><td>新發行人、20 位以上新投資人</td><td class="num">6–10 PD</td><td class="num">3–5 PD</td></tr>
 </tbody></table></div>
+<p class="meta">B 模式比 v1 少，是因為簿記和分配都在系統內完成，代錄工作減少。</p>
 <p>此外，Aegis 依序審核還要等 3–7 個工作天的日曆時間，首發約 5–10 個工作天。</p>
 
 <h3>另列、不計入基準的項目</h3>
 <ul>
   <li>Aegis 返工預備：+10–20 PD，因為 API 還沒實作。觸發條件：A 階段過半時 Aegis dev 環境仍不可用。</li>
   <li>自然人投資人：+6–10 PD。</li>
-  <li>開放線上申購：+6–10 PD（B4、B9 各加 3–5）。</li>
+  <li>若 DigiQuick 只提供系統給安排行使用、不自己擔任簿記管理人：訂單簿的權限模型 ±3–5 PD。</li>
   <li>如果只有 1 名全端工程師：工程部分約 145–215 PD，日曆要 7–10 個月以上。</li>
 </ul>
 
 <h3>估算假設</h3>
 <ul>
   <li>首發投資人是<b>法人</b>，沿用現有「公司＋聯絡人」註冊，投資人不選資產類型。</li>
-  <li>APP 只做唯讀：申購、分配、付款都由 OPS 在 admin 代錄並附憑證。</li>
-  <li>付款一律人工；平台只記錄，並做雙人覆核。</li>
+  <li>DigiQuick 是發行營運中樞：不持有私鑰、不執行鏈上交易、不處理資金。鏈上動作都以結構化業務意圖交給 Aegis 執行。</li>
+  <li>簿記在系統內：投資人可在 APP 下單，OPS 也可在 admin 代下單；分配在系統內完成，並做雙人核准。</li>
+  <li>付款一律人工；DigiQuick 只負責交割編排：發出交割指示、記錄並覆核到帳憑證，確認後才送出 mint 意圖。</li>
+  <li>DigiQuick 的登記冊是權威，Aegis 和鏈上是鏡像（前提是法律上允許 DigiQuick 擔任登記處）。</li>
+  <li>DigiQuick 計算固定利率的應得金額，付款代理執行付款。浮動利率和提前贖回放在 C。</li>
   <li>不開放外部地址（要等 Aegis 主網 KYT）。</li>
-  <li>付息由付款代理計算。</li>
 </ul>
 
 <div class="callout"><b>首發日期取決於 Aegis 三個環境的交付日期和律師文件定稿，不取決於 DigiQuick 的開發。</b></div>
@@ -143,19 +187,21 @@
 <tr class="total"><td colspan="4">A 合計（累計）</td><td class="num">54–84</td><td colspan="2">從零口徑：70–105</td></tr>
 </tbody></table></div>
 
-<h3>B 首筆正式發行版（增量 134–205 PD）</h3>
+<h3>B 首筆正式發行版（增量 156–241 PD）</h3>
 <div class="table-wrap"><table>
 <thead><tr><th>工作包</th><th>交付物</th><th>負責方</th><th>投入角色</th><th class="num">PD</th><th>前置依賴</th><th>驗收條件</th></tr></thead>
 <tbody>
 <tr><td>B1 雙角色註冊（法人） <span class="tag t-reuse">改造：<code>sign-up-service.ts</code>、<code>PendingKyc/*</code></span></td><td>角色旗標、KYC 分支</td><td>DQ</td><td>BE、FE</td><td class="num">8–12</td><td>A</td><td>兩種角色都能完成 KYC</td></tr>
 <tr><td>B2 KYC 錢包步驟改成觸發 Aegis 開戶 <span class="tag t-reuse">重用：<code>assign-wallet-address.ts</code></span></td><td>自動開戶與回填錢包地址</td><td>DQ（Aegis 核准）</td><td>BE</td><td class="num">3–6</td><td>B1</td><td>取得 clientId 和錢包</td></tr>
 <tr><td>B3 Offering 狀態機 <span class="tag">待開發</span></td><td>模型與狀態機</td><td>DQ</td><td>BE</td><td class="num">5–8</td><td>A</td><td>狀態只能往前推進</td></tr>
-<tr><td>B4 admin 代錄申購 <span class="tag">待開發</span></td><td>代錄 API</td><td>DQ</td><td>BE</td><td class="num">2–3</td><td>B3</td><td>代錄有稽核紀錄</td></tr>
-<tr><td>B5 分配 CSV 匯入與核准 <span class="tag">待開發</span></td><td>匯入與校驗</td><td>DQ</td><td>BE</td><td class="num">4–6</td><td>B4</td><td>分配合計等於發行量</td></tr>
+<tr><td>B4 訂單簿（簿記）：下單、修改、撤單、截簿；APP 下單與 admin 代下單 <span class="tag">待開發</span></td><td>訂單簿模組、訂單版本紀錄</td><td>DQ</td><td>BE</td><td class="num">8–12</td><td>B3</td><td>截簿後無法再下單；每筆修改都有紀錄</td></tr>
+<tr><td>B5 系統內分配（可選 CSV 匯入）、雙人核准、分配通知 <span class="tag">待開發</span></td><td>分配模組</td><td>DQ</td><td>BE</td><td class="num">6–9</td><td>B4、B8</td><td>分配合計等於發行量；分配不超過訂單量；通知已送出</td></tr>
+<tr><td>B5b 發行資格規則與合規閘門（專業投資者、司法管轄區） <span class="tag">待開發</span></td><td>規則設定、閘門檢查</td><td>DQ</td><td>BE</td><td class="num">3–5</td><td>B1</td><td>不合資格的投資人無法下單，也不會出現在 allowlist 意圖中</td></tr>
 <tr><td>B6 付款記錄、回單、mint 前檢查 <span class="tag t-reuse">重用：S3 上傳</span></td><td>付款模組</td><td>DQ</td><td>BE</td><td class="num">4–6</td><td>B5</td><td>未付款的投資人不能進入 mint 批次</td></tr>
-<tr><td>B7 Holding 登記冊與快照 <span class="tag">待開發</span></td><td>登記冊表</td><td>DQ</td><td>BE</td><td class="num">5–8</td><td>A10</td><td>和 holders API 一致</td></tr>
+<tr><td>B6b 交割編排：交割指示、交割狀態機、部分到帳與交割失敗處理 <span class="tag">待開發</span></td><td>交割狀態機</td><td>DQ</td><td>BE</td><td class="num">3–5</td><td>B6、A6</td><td>每筆分配都可追蹤到「已交付」或已記錄的失敗原因</td></tr>
+<tr><td>B7 權威登記冊：變更只追加不改寫、快照、登記冊摘錄 <span class="tag">待開發</span></td><td>登記冊與變更日誌</td><td>DQ</td><td>BE</td><td class="num">8–13</td><td>A10</td><td>登記冊可重建任一時點的持有人；和 holders API 鏡像一致</td></tr>
 <tr><td>B8 輕量雙人覆核（分配、付款、mint 或 burn） <span class="tag t-reuse">擴充：<code>auth.ts</code>、<code>permission.ts</code></span></td><td>核准流程</td><td>DQ</td><td>BE、FE</td><td class="num">4–6</td><td>B5、B6</td><td>同一人無法既提交又核准</td></tr>
-<tr><td>B9 app 唯讀頁與修 <code>asset(id)</code> 越權讀取 <span class="tag t-reuse">改造：<code>query.asset.ts</code></span></td><td>投資人頁、發行人頁</td><td>DQ</td><td>FE、BE</td><td class="num">12–16</td><td>B5–B7</td><td>越權讀取測試讀不到資料</td></tr>
+<tr><td>B9 app 頁面（投資人下單、我的訂單、分配、持倉、登記冊摘錄；發行人即時訂單簿）與修 <code>asset(id)</code> 越權讀取 <span class="tag t-reuse">改造：<code>query.asset.ts</code></span></td><td>投資人頁、發行人頁</td><td>DQ</td><td>FE、BE</td><td class="num">15–21</td><td>B5–B7</td><td>越權讀取測試讀不到資料</td></tr>
 <tr><td>B10 admin 主控台（代錄、付款覆核、例外佇列） <span class="tag t-reuse">改造</span><br><span class="meta"><code>PaymentPending</code> 只有空殼</span></td><td>admin 頁面</td><td>DQ</td><td>FE</td><td class="num">10–16</td><td>B3–B8</td><td>營運不必直接動資料庫</td></tr>
 <tr><td>B11 Aegis 後台事件落地（暫停、凍結、強制轉移） <span class="tag t-aegis">Aegis</span></td><td>事件紀錄與告警</td><td>DQ</td><td>BE</td><td class="num">3–5</td><td>A4</td><td>每種事件都有告警</td></tr>
 <tr><td>B12 email 範本（分配、到帳、交付） <span class="tag t-reuse">重用：<code>core/email</code></span></td><td>範本</td><td>DQ</td><td>BE</td><td class="num">0–3</td><td>—</td><td>範本已覆核</td></tr>
@@ -163,19 +209,19 @@
 <tr><td>B14 對帳匯出（人工比對）</td><td>CSV</td><td>DQ</td><td>BE、OPS</td><td class="num">3–5</td><td>B7</td><td>差異報告已簽核</td></tr>
 <tr><td>B15 stg 端到端、8 種資產回歸、UAT、主網彩排 <span class="tag t-aegis">Aegis</span></td><td>UAT 簽核、實測的審核時長</td><td>DQ（發行人參與）</td><td>QA、OPS</td><td class="num">12–18</td><td>Aegis stg、主網</td><td>UAT 簽核</td></tr>
 <tr><td>B16 主網設定與監控 <span class="tag t-reuse">改造：<code>network.ts</code> 目前只有 testnet</span></td><td>告警</td><td>DQ</td><td>DevOps</td><td class="num">5–8</td><td>主網憑證</td><td>告警演練有觸發</td></tr>
-<tr class="total"><td colspan="4">工程小計</td><td class="num">87–134</td><td colspan="2"></td></tr>
+<tr class="total"><td colspan="4">工程小計</td><td class="num">107–166</td><td colspan="2"></td></tr>
 <tr><td>B17 SOP、runbook、培訓</td><td>文件、演練紀錄</td><td>DQ</td><td>OPS、合規</td><td class="num">6–9</td><td>B18b</td><td>桌面演練並留紀錄</td></tr>
 <tr><td>B18a 項目管理</td><td>計畫、RACI、go/no-go</td><td>DQ</td><td>PM</td><td class="num">15–20</td><td>—</td><td>各方簽核 go/no-go</td></tr>
-<tr><td>B18b 需求與七大流程設計</td><td>泳道圖、例外決策表</td><td>DQ</td><td>BA、合規</td><td class="num">8–12</td><td>律師初稿</td><td>律師、付款代理、Aegis 都確認</td></tr>
+<tr><td>B18b 需求與七大流程設計（含簿記規則、登記處作業程序）</td><td>泳道圖、例外決策表</td><td>DQ</td><td>BA、合規</td><td class="num">10–16</td><td>律師初稿</td><td>律師、付款代理、Aegis 都確認</td></tr>
 <tr><td>B18c 外部對接（Aegis、律師、付款代理、發行人）</td><td>日程、作業備忘</td><td>DQ</td><td>PM、BA</td><td class="num">8–12</td><td>—</td><td>日程寫進計畫</td></tr>
 <tr><td>B19 首發執行</td><td>執行清單</td><td>DQ（Aegis 審核）</td><td>OPS、BE</td><td class="num">4–8</td><td>以上全部</td><td>三方對帳簽核</td></tr>
 <tr><td>B20 hypercare（2–3 週）</td><td>問題日誌</td><td>DQ</td><td>BE、OPS</td><td class="num">6–10</td><td>B19</td><td>連續 5 天沒有未解釋的差異</td></tr>
-<tr class="total"><td colspan="4">非工程小計</td><td class="num">47–71</td><td colspan="2"></td></tr>
-<tr class="total"><td colspan="4">B 合計（增量）</td><td class="num">134–205</td><td colspan="2">從零口徑：178–263</td></tr>
-<tr><td>B 之後的補件：付息快照與付款記錄、贖回 burn、BURN_AND_MINT <span class="tag t-aegis">Aegis</span></td><td>補件模組</td><td>DQ</td><td>BE</td><td class="num">9–15</td><td>B19</td><td>首次付息或轉讓前完成</td></tr>
+<tr class="total"><td colspan="4">非工程小計</td><td class="num">49–75</td><td colspan="2"></td></tr>
+<tr class="total"><td colspan="4">B 合計（增量）</td><td class="num">156–241</td><td colspan="2">從零口徑：205–305</td></tr>
+<tr><td>生命週期上線：付息日程結構化、固定利率應得金額計算、記錄日快照、付款憑證錄入、贖回送 BURN 意圖、BURN_AND_MINT <span class="tag t-aegis">Aegis</span></td><td>生命週期模組</td><td>DQ</td><td>BE、FE</td><td class="num">15–24</td><td>B7、B19</td><td>首次付息前上線；應得金額和付款代理核對一致</td></tr>
 </tbody></table></div>
 
-<h3>C 可重複發行版（增量 62–100 PD）</h3>
+<h3>C 可重複發行版（增量 54–90 PD）</h3>
 <div class="table-wrap"><table>
 <thead><tr><th>工作包</th><th class="num">PD</th></tr></thead>
 <tbody>
@@ -184,25 +230,25 @@
 <tr><td>批量開戶（超過 50 位投資人）</td><td class="num">5–8</td></tr>
 <tr><td>通用 maker-checker、營運主控台、webhook 重送 UI</td><td class="num">6–10</td></tr>
 <tr><td>自動報表</td><td class="num">6–10</td></tr>
-<tr><td>系統化付息</td><td class="num">8–12</td></tr>
-<tr><td>系統化贖回</td><td class="num">4–6</td></tr>
+<tr><td>浮動利率、提前贖回等其他生命週期事件（固定利率付息與到期贖回已移入 B）</td><td class="num">4–8</td></tr>
 <tr><td>CI 加入測試和 migration</td><td class="num">7–12</td></tr>
 <tr><td>UAT、PM</td><td class="num">12–20</td></tr>
-<tr class="total"><td>C 合計（增量）</td><td class="num">62–100</td></tr>
+<tr class="total"><td>C 合計（增量）</td><td class="num">54–90</td></tr>
 </tbody></table></div>
 
-<h3>各環節的人工做法與系統化增量</h3>
-<p>「人工做法」是 B 的基準；「系統化」是相對人工做法多出的開發人日。</p>
+<h3>各環節的平台做法（v2）</h3>
+<p>依新定位，DigiQuick 負責的環節都在 B 內系統化；只有資金收付維持人工，DigiQuick 只記錄和覆核。</p>
 <div class="table-wrap"><table>
-<thead><tr><th>環節</th><th>B 的基準做法</th><th>系統化：多出的開發 PD</th><th>未定事項（列為估算假設）</th></tr></thead>
+<thead><tr><th>環節</th><th>所屬職責</th><th>B 的做法</th><th>延後或不在範圍</th><th>未定事項（列為估算假設）</th></tr></thead>
 <tbody>
-<tr><td>認購</td><td>投資人線下申購，OPS 在 admin 代錄並附文件</td><td>app 自助認購：+6–10</td><td>認購文件的形式、簽署方式；是否要專業投資者認定</td></tr>
-<tr><td>分配</td><td>安排行出 Excel → CSV 匯入 → 系統校驗 → 雙人核准</td><td>自動配售規則：+6–10（延後）</td><td>簿記由誰做</td></tr>
-<tr><td>付款與交收</td><td>付款人工；admin 錄入到帳並上傳回單，雙人覆核；先款後券</td><td>銀行對帳單自動比對：+10–15（不在範圍）</td><td>收款帳戶屬於誰；部分到帳的處理；T+幾天交付</td></tr>
-<tr><td>持有人紀錄</td><td>系統化 <code>Holding</code> 登記冊，加上人工三方比對</td><td>每日自動對帳工具：+3–4（放在 C）</td><td>鏈下登記冊和鏈上哪一個是權威；登記處由誰擔任</td></tr>
-<tr><td>付息</td><td>付款代理計算並付款；平台提供記錄日快照，OPS 錄入付款記錄</td><td>計息引擎：+8–12（浮息再加 3–5，放在 C）</td><td>由付款代理還是 DigiQuick 計算</td></tr>
-<tr><td>贖回</td><td>本金付款確認後，在雙人核准下送 BATCH_BURN</td><td>贖回事件自動化：+4–6（放在 C）</td><td>能否提前贖回</td></tr>
-<tr><td>轉讓、更正</td><td>收到書面指示後送 BURN_AND_MINT</td><td>投資人在 app 發起轉讓：+8–12（延後）</td><td>首發是否允許轉讓</td></tr>
+<tr><td>認購</td><td>簿記配售</td><td>系統內訂單簿；投資人在 APP 下單，或 OPS 在 admin 代下單</td><td>—</td><td>DigiQuick 自己擔任簿記管理人，還是只提供系統給安排行</td></tr>
+<tr><td>分配</td><td>簿記配售</td><td>系統內分配（可選 CSV 匯入）、雙人核准、分配通知</td><td>自動配售規則：+6–10（延後）</td><td>分配原則由誰決定</td></tr>
+<tr><td>資格與合規</td><td>身份合規</td><td>KYC、專業投資者認定、每檔發行的資格規則；合規通過才送出 allowlist 意圖</td><td>定期 KYC 複核：放在 C</td><td>司法管轄區限制</td></tr>
+<tr><td>付款與交收</td><td>交割編排</td><td>發出交割指示；付款人工，admin 錄入到帳並上傳回單，雙人覆核；確認後送出 mint 意圖；先款後券</td><td>銀行對帳單自動比對：+10–15（不在範圍）</td><td>收款帳戶屬於誰；部分到帳的處理；T+幾天交付</td></tr>
+<tr><td>持有人紀錄</td><td>登記</td><td>DigiQuick 權威登記冊，變更只追加不改寫；和 Aegis、鏈上鏡像比對</td><td>每日自動對帳工具：+3–4（放在 C）</td><td>DigiQuick 擔任登記處的法律依據</td></tr>
+<tr><td>付息</td><td>生命週期</td><td>DigiQuick 計算固定利率應得金額並出記錄日快照；付款代理付款；OPS 錄入付款憑證</td><td>浮動利率：放在 C</td><td>雙方計算不一致時以哪一方為準</td></tr>
+<tr><td>贖回</td><td>生命週期</td><td>本金付款確認後，在雙人核准下送出 BATCH_BURN 意圖，並註銷登記冊</td><td>提前贖回：放在 C</td><td>能否提前贖回</td></tr>
+<tr><td>轉讓、更正</td><td>生命週期、登記</td><td>收到書面指示後送出 BURN_AND_MINT 意圖，並更新登記冊</td><td>投資人在 app 發起轉讓：+8–12（延後）</td><td>首發是否允許轉讓</td></tr>
 </tbody></table></div>
 
 <h3>人工步驟：執行人、覆核人與完成憑證</h3>
@@ -211,11 +257,11 @@
 <tbody>
 <tr><td>投資人 KYC 與專業投資者認定</td><td>合規</td><td>合規主管</td><td>KYC 結論文件；admin 的 KYC 紀錄</td></tr>
 <tr><td>Aegis 客戶申請與錢包核准的跟進</td><td>OPS</td><td>營運主管</td><td>Aegis <code>clientId</code>、<code>walletId</code>；Aegis 審批紀錄</td></tr>
-<tr><td>分配表定稿</td><td>安排行出表、OPS 錄入</td><td>營運主管（系統雙人覆核）</td><td>簽署版分配表；系統合計檢查紀錄</td></tr>
+<tr><td>截簿與分配定稿</td><td>OPS（依分配原則在系統內分配）</td><td>營運主管（系統雙人覆核）</td><td>截簿時的訂單簿快照；系統分配核准紀錄</td></tr>
 <tr><td>付款確認</td><td>OPS</td><td>另一位 OPS 或財務</td><td>銀行入帳回單或付款代理到帳清單（上傳到 S3）</td></tr>
 <tr><td>部署、角色、allowlist、mint 的觸發</td><td>OPS 發起、BE 執行腳本</td><td>營運主管</td><td>Aegis 審批紀錄、requestId、txHash、ConfluxScan 連結</td></tr>
 <tr><td>三方對帳</td><td>OPS</td><td>營運主管</td><td>登記冊快照、holders CSV、Aegis 託管帳單、差異說明</td></tr>
-<tr><td>付息（記錄日）</td><td>付款代理</td><td>OPS</td><td>記錄日快照、付款完成報告</td></tr>
+<tr><td>付息（記錄日）</td><td>付款代理付款（依 DigiQuick 計算的應得清單）</td><td>OPS</td><td>記錄日快照、應得清單、付款完成報告</td></tr>
 <tr><td>贖回</td><td>付款代理付款，OPS 觸發 BURN</td><td>營運主管</td><td>付款回單、burn 的 txHash、登記冊註銷快照</td></tr>
 <tr><td>暫停、凍結、強制轉移</td><td>Aegis 後台（依書面指示）</td><td>合規</td><td>書面指示、webhook 紀錄、<code>/v1/operations</code> 查詢結果</td></tr>
 </tbody></table></div>
@@ -241,7 +287,7 @@
 </ul>
 
 <h2 id="s3">三、改造與從零的對比</h2>
-<p>A＋B 合計：改造 188–289 PD，從零 248–368 PD，差約 60–80 PD。差異最大的三個工作包：</p>
+<p>A＋B 合計（v2）：改造 210–325 PD，從零 275–410 PD，差約 65–85 PD。差異最大的三個工作包（數字沿用 v1 團隊定稿；B9 在 v2 增加的 3–5 PD 兩種口徑都要加）：</p>
 <div class="table-wrap"><table>
 <thead><tr><th>工作包</th><th class="num">改造</th><th class="num">從零</th><th class="num">差距</th><th>原因</th></tr></thead>
 <tbody>
@@ -249,14 +295,14 @@
 <tr><td>B1 雙角色註冊</td><td class="num">8–12</td><td class="num">20–30</td><td class="num">+12–18</td><td>改造時沿用 <code>sign-up-service.ts</code>；投資人不選資產類型時，KYC 會自然跳過資產類型審核（<code>company.ts</code> 的 <code>every()</code> 對空清單回傳 true）</td></tr>
 <tr><td>B10 admin 主控台</td><td class="num">10–16</td><td class="num">20–28</td><td class="num">+10–14</td><td>改造時可用 admin 外殼、<code>auth.ts</code>、<code>permission.ts</code> 和表格元件</td></tr>
 </tbody></table></div>
-<p>Aegis 整合核心（A3–A6、A8）兩種口徑幾乎相同，因為現有平台沒有可重用的部分。</p>
+<p>Aegis 整合核心（A3–A6、A8）兩種口徑幾乎相同，因為現有平台沒有可重用的部分。v2 新增的訂單簿、交割狀態機和權威登記冊在現有程式碼中也沒有可重用的部分，所以兩種口徑的人日接近。</p>
 
 <h2 id="s4">四、兩人的共同結論、分歧與待確認問題</h2>
 
-<h3>共同結論</h3>
+<h3>共同結論（v1 團隊定稿；第 1 點已依 v2 定位修訂）</h3>
 <div class="callout ok">
 <ol>
-  <li>首發採「APP 只讀、admin 代錄、輕量雙人覆核」。投資人和發行人走同一套註冊流程，在 APP 上看得到認購、分配、付款狀態和持倉。</li>
+  <li><b>v2：</b>首發改為「系統內簿記與分配、輕量雙人覆核」。投資人和發行人走同一套註冊流程；投資人可在 APP 下單，並看到訂單、分配、付款狀態、持倉和登記冊摘錄；發行人在 APP 看即時訂單簿。<span class="meta">（v1 原為「APP 只讀、admin 代錄」。）</span></li>
   <li><b><code>asset(id)</code> 目前任何登入的客戶都能讀任何資產（原始碼標了 <code>TODO: auth</code>）</b>，投資人上平台前必須修，已計入 B9。</li>
   <li>雙人覆核在首發必須寫進系統，只做三個關鍵動作：分配核准、付款確認、mint 或 burn 的觸發。通用框架放到 C。</li>
   <li>編排由 BE 執行腳本，admin 保留唯讀的請求列表。BURN 要在 A 階段驗證；BURN_AND_MINT、付息工具和系統化贖回延後。</li>
@@ -265,15 +311,23 @@
 </ol>
 </div>
 
-<h3>尚有分歧（影響都不大）</h3>
+<h3>尚有分歧（v1 團隊討論結果，影響都不大）</h3>
 <div class="table-wrap"><table>
 <thead><tr><th>項目</th><th>工程師</th><th>PM</th><th>影響</th></tr></thead>
 <tbody>
 <tr><td>B10 要不要做發行步驟面板</td><td>不做，10–14</td><td>做，12–16</td><td>±2 PD</td></tr>
 <tr><td>B12 email</td><td>1–3</td><td>0–2</td><td>±1 PD</td></tr>
 <tr><td>B 的日曆週數</td><td>15–20</td><td>14–18</td><td>要等主網審核時長實測後再定</td></tr>
-<tr><td>每新增一筆發行（B 模式）</td><td>4–7</td><td>5–9</td><td>差在代錄工作量</td></tr>
+<tr><td>每新增一筆發行（B 模式）</td><td>4–7</td><td>5–9</td><td>差在代錄工作量；v2 簿記系統化後合併為 3–7</td></tr>
 </tbody></table></div>
+<p class="meta">v2 新增的 B4、B5、B5b、B6b、B7、生命週期上線等人日，尚未經兩位隊員校準。</p>
+
+<h3>v2 定位下已有答案的問題</h3>
+<ul>
+  <li>「鏈下登記冊和鏈上哪個是權威」：DigiQuick 的登記冊是權威，鏈上和 Aegis 是鏡像。</li>
+  <li>「KYC 由誰做」：DigiQuick。</li>
+  <li>「付息由誰計算」：DigiQuick 計算應得金額，付款代理執行付款。</li>
+</ul>
 
 <h3>排期前需要確認的問題</h3>
 <div class="table-wrap"><table>
@@ -281,9 +335,8 @@
 <tbody>
 <tr><td><b>DigiQuick</b></td><td><ol>
   <li>首發投資人是法人還是自然人？大約多少人？</li>
-  <li>是否接受首發不開放線上申購？</li>
-  <li>KYC 和專業投資者認定由誰做？</li>
-  <li>鏈下登記冊和鏈上，哪一個是權威？登記處由誰擔任？</li>
+  <li><b>（v2 新增）</b>DigiQuick 自己擔任簿記管理人，還是只提供系統給安排行使用？這會影響訂單簿的權限模型（±3–5 PD）。</li>
+  <li>專業投資者認定的標準和證明文件是什麼？</li>
   <li>收款帳戶屬於誰？交付時限是 T+幾天？部分到帳怎麼處理？</li>
   <li>首發是否允許轉讓或提前贖回？</li>
   <li><code>incorporationNo</code> 能否沿用註冊時填的 Business Tax ID？</li>
@@ -298,10 +351,13 @@
   <li>CFX gas 由誰支付、誰補充？</li>
   <li>主網 KYT 的時程。</li>
   <li>Aegis onboarding 的 KYC 結果能否直接作為投資人 KYC 的依據？</li>
+  <li><b>（v2 升級）</b>Aegis 後台執行的凍結、強制轉移等操作，回寫 DigiQuick 權威登記冊時的順序和確認機制怎麼定？</li>
 </ol></td></tr>
 <tr><td><b>律師、付款代理及其他</b></td><td><ol>
+  <li><b>（v2 新增）</b>DigiQuick 擔任登記處和簿記方，是否需要委任或牌照？如果法律上不能擔任登記處，「登記」職責要降級為鏡像登記冊。</li>
   <li>條款何時定稿？代幣和登記冊的法律關係？強制轉移的依據？ISIN 何時取得？</li>
-  <li>到帳清單和記錄日快照的格式？付息和贖回的作業時限？</li>
+  <li>到帳清單的格式？付息和贖回的作業時限？</li>
+  <li><b>（v2 新增）</b>DigiQuick 計算的應得金額和付款代理不一致時，以哪一方為準？</li>
   <li>是否要做滲透測試（OZ R02.4）？由誰做、排在何時？</li>
 </ol></td></tr>
 </tbody></table></div>
