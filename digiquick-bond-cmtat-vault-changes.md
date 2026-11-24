@@ -267,4 +267,4 @@ stateDiagram-v2
 7. 登記冊、持倉快照與三方對帳；Aegis 後台事件落地。
 8. 存續操作：`BURN_AND_MINT`、`SET_TERMS`；到期贖回 `BATCH_BURN`。
 
-第 3 到 6 步可以先在 mock server 上完成，Aegis dev 環境可用後再做端到端驗證。工時估算見同目錄的 `bond-cmtat-aegis-estimate-report.md`；該報告假設投資人由券商開戶、不做投資人前台，個人投資人註冊、KYC 和 APP 畫面都要重新估算。
+第 3 到 6 步可以先在 mock server 上完成，Aegis dev 環境可用後再做端到端驗證。舊版工時估算（`bond-cmtat-aegis-estimate-report.md`）是在「投資人由券商開戶、不做投資人前台」的前提下做的，已不適用本文件的設計。個人投資人註冊、KYC 和 APP 投資人畫面需要重新估算。
