@@ -28,6 +28,9 @@ bond 改成由冷錢包系統部署和操作 CMTAT 合約，DigiQuick 不再持�
 - **只用託管錢包**：正式環境要等 Conflux 的 KYT 接上後才能登記外部地址和提領（指南 §7.2、§13），所以首發不開放外部地址。
 - **指南 v0.6 的 API 全部還沒有實作**，欄位可能微調。開發先用 mock server，Aegis dev 環境可用後再驗證。
 - 付款在鏈外：CMTAT 和冷錢包都不處理現金。預設採用先款後券（FoP）。
+- **CMTAT 採用 3.0.0 版**。
+- **同一家公司可以同時是發行方和投資人**，在冷錢包是兩個客戶（一個 ISSUER、一個 INVESTOR）。
+- **同時是發行方和投資人的公司，不能認購自己發行的 bond**。
 
 ## 3. 要移除或繞開的既有鏈上邏輯
 
@@ -80,12 +83,13 @@ bond 新增 `issuanceChannel = VAULT_CMTAT` 後，下列程式對 bond 不再使
 | --- | --- |
 | 發行方 | 自己的 bond 全部狀態、認購簿、分配、交割進度、持有人、冷錢包請求進度（含審核關卡 `review.aegisStage`） |
 | 機構投資人 | 公開認購中的 bond 的公開欄位和公開文件；自己的認購、分配、付款狀態、持倉、付息與贖回紀錄、凍結等事件 |
-| 兩個角色都有的公司 | 兩組畫面分開；是否允許認購自己發行的 bond 待定（第 10 節） |
+| 兩個角色都有的公司 | 兩組畫面分開；看不到也不能認購自己發行的 bond |
 | admin | 全部，依新增的 `AdminAction` 權限項 |
 
 - 新增 `OfferingGuard`、`InvestorGuard`，和現有 `CompanyGuard` 並用。JWT payload 或 loader 要能取得公司的 `participantRoles`。
 - GraphQL 拆成公開版 `BondOfferingDto` 和發行方版 DTO，不要共用 `AssetDto`，避免審核紀錄、簽名、非公開文件外洩。
 - 投資人之間互相看不到。發行方能不能看到投資人明細，待定（第 10 節）。
+- 建立認購時檢查：認購方公司不能是該 bond 的發行方公司（`Subscription` 的 service 層和 `OfferingGuard` 都要擋）。投資人的「可認購債券」列表也排除自己發行的 bond。
 - 新增 `AdminAction`：`VIEW_OFFERINGS`、`MANAGE_OFFERINGS`、`MANAGE_ALLOCATIONS`、`CONFIRM_PAYMENTS`、`SUBMIT_VAULT_REQUESTS`、`MANAGE_INVESTOR_ELIGIBILITY`。
 
 ## 6. bond 的發行、認購與生命週期
@@ -117,7 +121,7 @@ stateDiagram-v2
 | 審核中 | `REVIEWING` | 發行方提交 bond | — | 發行方 |
 | 已核准 | `APPROVED` | admin 審核通過、發行方確認 | — | 發行方 |
 | 建立合約 | `CONTRACT_SETUP` | 條款 PDF 定稿 | 上傳條款、`cmtat/deployments`、`GRANT_ROLE` × 6 | 發行方 |
-| 開放認購 | `OPEN_FOR_SUBSCRIPTION` | 角色都已在鏈上生效、到達認購開始日 | — | 發行方；所有已通過認定的投資人 |
+| 開放認購 | `OPEN_FOR_SUBSCRIPTION` | 角色都已在鏈上生效、到達認購開始日 | — | 發行方；所有已通過認定的投資人（發行方公司本身除外） |
 | 截止簿記 | `BOOK_CLOSED` | 到達截止日或發行方手動截止 | — | 發行方；已認購的投資人 |
 | 已分配 | `ALLOCATED` | 分配表覆核通過，合計等於發行量 | `BATCH_SET_ALLOWLIST` | 發行方；獲配的投資人 |
 | 交割中 | `SETTLING` | 至少一位投資人付款已確認 | 依到帳分批送 `BATCH_MINT` | 發行方；獲配的投資人 |
@@ -231,8 +235,7 @@ stateDiagram-v2
 **Aegis**
 
 - [ ] `INVESTOR` 客戶能不能用機構資料申請？指南 v0.6 只有個人欄位。這項決定註冊欄位和 `VaultClient` 的設計，最先確認。
-- [ ] 同一家公司能不能同時是 ISSUER 和 INVESTOR 兩個客戶？
-- [ ] CMTAT 細節（目前指南沒有寫）：部署的 request body、`GRANT_ROLE` 是哪 6 個角色、CMTAT 版本與審計、decimals。
+- [ ] CMTAT 3.0.0 的細節（目前指南沒有寫）：部署的 request body、`GRANT_ROLE` 是哪 6 個角色、審計證據、decimals。
 - [ ] 審核 SLA，以及 dev、stg、主網的交付日期。
 - [ ] CFX gas 由誰出、誰補充。
 
@@ -240,7 +243,6 @@ stateDiagram-v2
 
 - [ ] 發行方能不能看到每位投資人的身份和認購金額，還是只看彙總？
 - [ ] 分配由發行方在 APP 決定、admin 覆核；還是由安排行或 admin 決定？
-- [ ] 同時是發行方和投資人的公司，能不能認購自己發行的 bond？
 - [ ] 專業投資者認定由 DigiQuick 審核，還是採用券商的認定結果？
 - [ ] 付息與贖回金額由付款代理計算，還是由 DigiQuick 計算？
 - [ ] 持有人的正式紀錄以鏈下登記冊為準（本文件的預設），需要律師確認。
@@ -248,7 +250,7 @@ stateDiagram-v2
 ## 11. 建議的實施順序
 
 1. 修 `asset(id)` 權限漏洞，不用等其他決策。
-2. 向 Aegis 確認第 10 節的前三項（機構投資人、雙角色、CMTAT 細節）。
+2. 向 Aegis 確認第 10 節的前兩項（機構投資人、CMTAT 3.0.0 細節）。
 3. 冷錢包基礎元件：API client、`VaultRequest`、webhook、對帳 cron、mock server。
 4. 註冊與 KYC 分流、`VAULT_ONBOARDING`（發行方與投資人開戶）。
 5. bond 新欄位、`issuanceChannel`、CMTAT 建立流程（條款、部署、角色）。
