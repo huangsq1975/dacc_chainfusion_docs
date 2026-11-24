@@ -13,7 +13,7 @@ bond 改成由冷錢包系統部署和操作 CMTAT 合約，DigiQuick 不再持�
 | --- | --- | --- |
 | 簿記配售 | 開放認購、收認購單、分配、檢查發行量與最低面額 | — |
 | 身份合規 | 發行方公司 KYC、個人投資人 KYC 與資格審核、決定 allowlist 的開或關 | 審核客戶申請；登記外部地址時做 KYT |
-| 交割編排 | 分配後 mint 並鎖倉、付款確認後才釋放、分批、排序 | 執行鎖倉與釋放（指南 v0.6 尚未提供，第 10 節） |
+| 交割編排 | 分配後開 allowlist、付款確認後才 mint、分批、排序 | 執行 allowlist 與 mint |
 | 登記 | 鏈下持有人登記冊（權威）、三方對帳、記錄日快照 | 提供鏈上持有人、餘額、凍結狀態查詢 |
 | 生命週期 | bond 狀態機、轉讓、修改條款、付息資料、到期贖回 | 暫停、凍結、強制轉移、停用（只能在 Aegis 後台操作） |
 | 送出業務意圖 | 產生 referenceId、送請求、接 webhook、輪詢對帳 | 人工審核、簽名、廣播、記帳 |
@@ -27,7 +27,10 @@ bond 改成由冷錢包系統部署和操作 CMTAT 合約，DigiQuick 不再持�
 - **簽名和廣播都在冷錢包系統**：admin 和 APP 都不再連接 MetaMask 或其他錢包。
 - **只用託管錢包**：正式環境要等 Conflux 的 KYT 接上後才能登記外部地址和提領（指南 §7.2、§13），所以首發不開放外部地址。
 - **指南 v0.6 的 API 全部還沒有實作**，欄位可能微調。開發先用 mock server，Aegis dev 環境可用後再驗證。
-- 付款在鏈外：CMTAT 和冷錢包都不處理現金。**先鎖倉、款到才釋放**：分配確定後先把代幣 mint 到投資人託管錢包並鎖倉，DigiQuick 確認款項到帳後才釋放。指南 v0.6 沒有鎖倉與釋放的操作，要向 Aegis 提出（第 10 節）。
+- 付款在鏈外：CMTAT 和冷錢包都不處理現金。**款到才 mint**：分配確定後只把獲配投資人的託管錢包加進 allowlist；DigiQuick 確認某位投資人款項到帳後，才用 `BATCH_MINT` 把代幣發到該投資人的託管錢包。代幣一經發出就是已付款的持倉，不需要鎖倉，也不需要 Aegis 新增操作（指南 v0.6 已有 `BATCH_MINT`）。
+  - 鏈上 `totalSupply` 會隨付款分批增加，全部付款確認後才等於實際發行量；沒有賣出或逾期取消的額度不會 mint，不必再銷毀。
+  - 不採用「先 mint 再鎖倉」：要 Aegis 新增部分凍結的 API，而且付款前會有「已交付、未付款」的中間狀態。SFC 對代幣化證券沒有規定一定要鎖倉，交割方式由業務決定，但要向投資人清楚披露以哪個時點為交割完成。
+  - 也不採用「先 mint 到發行持有錢包、款到再 `BURN_AND_MINT` 分給投資人」：`BURN_AND_MINT` 沒有批次版，每位投資人一筆，Aegis 的人工審核量是 `BATCH_MINT`（每筆 20 人）的 20 倍。
 - **CMTAT 採用 3.0.0 版**。
 - **冷錢包客戶對應**：每家發行方公司是一個 ISSUER 客戶；每位個人投資人是一個 INVESTOR 客戶，直接用指南 §7.2 現有的個人欄位申請，不需要 Aegis 改 API。
 - 先前「同一家公司可以同時是 ISSUER 和 INVESTOR」「不能認購自己公司發行的 bond」兩項決定，因為投資人改為只收個人而不再適用。發行方的董事、員工能不能以個人身份認購，列在第 10 節待確認。
@@ -99,7 +102,7 @@ bond 新增 `issuanceChannel = VAULT_CMTAT` 後，下列程式對 bond 不再使
 
 ## 6. bond 的發行、認購與生命週期
 
-bond 在現有的審核流程之後，新增面向投資人的認購、分配、交割與存續狀態；分配確定後先 mint 並鎖倉，付款確認後才釋放。
+bond 在現有的審核流程之後，新增面向投資人的認購、分配、交割與存續狀態；分配確定後先開 allowlist，付款確認後才 mint。
 
 ```mermaid
 stateDiagram-v2
@@ -128,14 +131,15 @@ stateDiagram-v2
 | 建立合約 | `CONTRACT_SETUP` | 條款 PDF 定稿 | 上傳條款、`cmtat/deployments`、`GRANT_ROLE` × 6 | 發行方 |
 | 開放認購 | `OPEN_FOR_SUBSCRIPTION` | 角色都已在鏈上生效、到達認購開始日 | — | 發行方；所有已通過 KYC 的個人投資人 |
 | 截止簿記 | `BOOK_CLOSED` | 到達截止日或發行方手動截止 | — | 發行方；已認購的投資人 |
-| 已分配 | `ALLOCATED` | 分配表覆核通過，合計等於發行量 | `BATCH_SET_ALLOWLIST`、`BATCH_MINT`，再鎖倉（待 Aegis 提供） | 發行方；獲配的投資人 |
-| 交割中 | `SETTLING` | 至少一位投資人付款已確認 | 依到帳分批釋放（待 Aegis 提供） | 發行方；獲配的投資人 |
-| 已發行 | `ISSUED` | 全部釋放完成且三方對帳一致 | 存續期間：`BURN_AND_MINT`、`SET_TERMS`、`SET_INFORMATION` | 發行方；持有人 |
+| 已分配 | `ALLOCATED` | 分配表覆核通過，合計等於發行量 | `BATCH_SET_ALLOWLIST`（獲配投資人的託管錢包） | 發行方；獲配的投資人 |
+| 交割中 | `SETTLING` | 至少一位投資人付款已確認 | 依到帳分批 `BATCH_MINT` 到已付款投資人的託管錢包 | 發行方；獲配的投資人 |
+| 已發行 | `ISSUED` | 所有獲配額度都已付款並 mint，或逾期額度已處理完；三方對帳一致 | 存續期間：`BURN_AND_MINT`、`SET_TERMS`、`SET_INFORMATION` | 發行方；持有人 |
 | 已到期 | `MATURED` | 到期日 | — | 發行方；持有人 |
 | 已贖回 | `REDEEMED` | 本金付款確認 | `BATCH_BURN` | 發行方；原持有人 |
 
-- 認購與分配只存在 DigiQuick；冷錢包看到的是 allowlist、mint、鎖倉與釋放。
-- 鎖倉中的代幣不能轉讓、提領，也不計入可用持倉；APP 上投資人看到的是「已交付、待付款釋放」。
+- 認購與分配只存在 DigiQuick；冷錢包看到的是 allowlist 和 mint。
+- 付款確認前，APP 上投資人看到的是「已分配、待付款」，鏈上還沒有代幣；付款確認後是「交付中」（`BATCH_MINT` 審核和上鏈中），`COMPLETED` 後才計入持倉。
+- 同一批 `BATCH_MINT` 只放已確認付款的投資人；付款陸續到帳時，累積到一定人數或時間就送一批，不要每到一筆就送一筆。
 - `Asset.status` 對 bond 改成由這個狀態機推導，而不是由 `AssetTransaction` 推導。
 - Aegis 後台的暫停、凍結、強制轉移、停用收到 webhook 後，記錄事件、更新登記冊並告警；這些事件不改變上面的主狀態。
 
@@ -157,8 +161,7 @@ stateDiagram-v2
 | 個人投資人開戶 | kind=INVESTOR（個人欄位），再建託管錢包 | 投資人 KYC 通過 |
 | 建立債券合約 | 上傳條款 → `cmtat/deployments` → `GRANT_ROLE` × 6（依序）→ 查詢確認角色 | bond 核准後、開放認購前 |
 | 投資人准入或撤銷 | `BATCH_SET_ALLOWLIST` | 分配確定後；投資人資格失效時關閉 |
-| 交付並鎖倉 | `BATCH_MINT` 到投資人託管錢包，再鎖住同等數量（鎖倉操作待 Aegis 提供） | 分配確定後 |
-| 釋放 | 解除該投資人的鎖倉（待 Aegis 提供） | 付款確認後 |
+| 交付 | `BATCH_MINT` 到已付款投資人的託管錢包 | 付款確認後 |
 | 轉讓、換錢包 | `BURN_AND_MINT` | 轉讓審核通過 |
 | 修改條款或合約資訊 | `SET_TERMS`、`SET_INFORMATION` 等 | 條款變更核准 |
 | 贖回或註銷 | `BATCH_BURN` | 本金付款確認後 |
@@ -197,7 +200,7 @@ stateDiagram-v2
 | `Offering` | 新增 | 認購期間、最低面額、發行量上限、交割日、狀態 |
 | `Subscription` | 新增 | 個人投資人、認購金額、狀態 |
 | `Allocation` | 新增 | 個人投資人、分配金額、覆核人 |
-| `Settlement` | 新增 | 應付金額、付款確認人與時間、對應的 mint、鎖倉與釋放請求 |
+| `Settlement` | 新增 | 應付金額、付款期限、付款確認人與時間、對應的 `BATCH_MINT` 請求 |
 | `RegisterEntry`、`HoldingSnapshot` | 新增 | 鏈下登記冊異動、記錄日快照、對帳結果 |
 | `VaultClient` | 新增 | 發行方公司或個人投資人 → 冷錢包 `clientId`、`externalId` |
 | `VaultWallet` | 新增 | `walletId`、地址、用途（admin、maker、custodian、發行持有、託管） |
@@ -246,8 +249,7 @@ stateDiagram-v2
 
 - [ ] 個人 INVESTOR 申請時，除了指南 §7.2 的四個欄位，Aegis 審核還需要哪些資料或文件（例如證件影本、住址證明）？
 - [ ] CMTAT 3.0.0 的細節（目前指南沒有寫）：部署的 request body、`GRANT_ROLE` 是哪 6 個角色、審計證據、decimals。
-- [ ] 審核 SLA，以及 dev、stg、主網的交付日期。
-- [ ] **鎖倉與釋放（指南 v0.6 沒有，要 Aegis 新增）**：數字債券在分配確定後 mint 到投資人託管錢包並鎖倉，DigiQuick 確認款項到帳後再釋放。需要：按錢包和數量鎖倉、解除鎖倉（都要支援批次，或併入 `BATCH_MINT`）、查詢某錢包的鎖倉數量、對應的 webhook；鎖倉中的代幣不能轉讓、提領或被 `BURN_AND_MINT` 移走。是否用 CMTAT 3.0.0 合約本身的部分凍結實作、由哪個錢包簽名？
+- [ ] 審核 SLA，以及 dev、stg、主網的交付日期。交割期間付款會陸續到帳，`BATCH_MINT` 會分好幾批送出，需要知道每批從送出到 `COMPLETED` 大約要多久。
 
 **業務**
 
@@ -257,16 +259,17 @@ stateDiagram-v2
 - [ ] 付息與贖回金額由付款代理計算，還是由 DigiQuick 計算？
 - [ ] 持有人的正式紀錄以鏈下登記冊為準（本文件的預設），需要律師確認。
 - [ ] 發行方的董事、員工能不能以個人身份認購自己公司發行的 bond？
-- [ ] 投資人逾期未付款時，鎖倉中的代幣怎麼處理：銷毀後重新分配給其他投資人，還是延長付款期限？
+- [ ] 投資人逾期未付款時，該投資人的分配額度怎麼處理：取消後重新分配給其他投資人、延長付款期限，還是直接縮減發行量？（款到才 mint，逾期額度沒有上鏈，只要處理 DigiQuick 內的分配和 allowlist。）
+- [ ] 交割方式（款到才 mint）和 Aegis 託管是否符合《證券及期貨（客戶證券）規則》，需要合規顧問確認，並寫進給投資人的披露文件。
 
 ## 11. 建議的實施順序
 
 1. 修 `asset(id)` 權限漏洞，不用等其他決策。
-2. 向 Aegis 確認第 10 節的個人 INVESTOR 需要的資料、CMTAT 3.0.0 細節，並提出鎖倉與釋放的需求；決定個人投資人是否限專業投資者。
+2. 向 Aegis 確認第 10 節的個人 INVESTOR 需要的資料、CMTAT 3.0.0 細節和審核 SLA；決定個人投資人是否限專業投資者。
 3. 冷錢包基礎元件：API client、`VaultRequest`、webhook、對帳 cron、mock server。
 4. 註冊入口加個人分支、`Role.INVESTOR`、投資人 KYC、`VAULT_ONBOARDING`（發行方與投資人開戶）。
 5. bond 新欄位、`issuanceChannel`、CMTAT 建立流程（條款、部署、角色）。
-6. 認購、分配、付款確認、allowlist、`BATCH_MINT`、鎖倉與釋放，以及 APP 的發行方與投資人畫面。
+6. 認購、分配、allowlist、付款確認後 `BATCH_MINT`，以及 APP 的發行方與投資人畫面。
 7. 登記冊、持倉快照與三方對帳；Aegis 後台事件落地。
 8. 存續操作：`BURN_AND_MINT`、`SET_TERMS`、`SET_INFORMATION`；到期贖回 `BATCH_BURN`。
 
