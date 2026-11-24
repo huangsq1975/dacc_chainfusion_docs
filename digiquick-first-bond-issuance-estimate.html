@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DigiQuick 首筆數字債券發行：工作範圍、人日與交付時程估算</title>
+<style>
+  :root {
+    --fg: #1f2328; --muted: #59636e; --border: #d1d9e0; --bg: #ffffff;
+    --head: #f6f8fa; --accent: #0b5cad; --warn-bg: #fff8e1; --warn-bd: #e0b44c;
+    --ok-bg: #eef7ee; --ok-bd: #6aa96a;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --fg: #e6edf3; --muted: #9198a1; --border: #3d444d; --bg: #0d1117;
+      --head: #161b22; --accent: #58a6ff; --warn-bg: #2b2414; --warn-bd: #9e7a2a;
+      --ok-bg: #13251a; --ok-bd: #3f7d4f;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--fg);
+    font: 15px/1.65 -apple-system, "Segoe UI", "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+  }
+  main { max-width: 1180px; margin: 0 auto; padding: 32px 24px 64px; }
+  h1 { font-size: 26px; margin: 0 0 8px; }
+  h2 { font-size: 21px; margin: 40px 0 12px; padding-bottom: 6px; border-bottom: 2px solid var(--border); }
+  h3 { font-size: 17px; margin: 26px 0 10px; }
+  p, li { max-width: 80ch; }
+  .meta { color: var(--muted); font-size: 13.5px; }
+  .meta ul { margin: 6px 0; padding-left: 20px; }
+  nav { background: var(--head); border: 1px solid var(--border); border-radius: 8px; padding: 12px 18px; margin: 20px 0; }
+  nav ol { margin: 4px 0; padding-left: 22px; }
+  a { color: var(--accent); }
+  .table-wrap { overflow-x: auto; margin: 10px 0 16px; }
+  table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+  th, td { border: 1px solid var(--border); padding: 6px 9px; text-align: left; vertical-align: top; }
+  th { background: var(--head); white-space: nowrap; }
+  td.num, th.num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  tr.total td { font-weight: 600; background: var(--head); }
+  code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; background: var(--head); padding: 1px 4px; border-radius: 4px; }
+  .callout { border-left: 4px solid var(--warn-bd); background: var(--warn-bg); padding: 10px 14px; border-radius: 4px; margin: 14px 0; }
+  .callout.ok { border-color: var(--ok-bd); background: var(--ok-bg); }
+  .tag { display: inline-block; font-size: 11.5px; padding: 0 6px; border-radius: 10px; border: 1px solid var(--border); white-space: nowrap; }
+  .t-reuse { border-color: var(--ok-bd); }
+  .t-aegis { border-color: var(--warn-bd); }
+  footer { margin-top: 48px; color: var(--muted); font-size: 13px; border-top: 1px solid var(--border); padding-top: 12px; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>DigiQuick 首筆數字債券發行：工作範圍、人日與交付時程估算</h1>
+<div class="meta">
+  <div>日期：2026-11-24｜分析與估算：全端工程師、項目經理（兩人先獨立分析，再交換意見三輪後定稿）｜統籌與彙整：主會話</div>
+  <ul>
+    <li>依據：<code>digiquick-integration-guide-v0.6.md</code>（下稱「指南」；所述 Aegis 冷錢包 API <b>仍在規劃，尚未實作</b>）、<code>Digital_Asset_Risk_Assessment_Report.md</code>（下稱「OZ 報告」），以及對 digiquick-api / admin / app / contracts 四個 repo 的唯讀核對。</li>
+    <li>依據缺口：指南引用的 <code>SPEC.md</code> 不在工作區，因此 CMTAT 部署參數、6 個角色、decimals 等都列為「Aegis 待確認」。</li>
+    <li>本輪只做分析與估算，沒有修改任何程式碼。</li>
+  </ul>
+</div>
+
+<div class="callout">
+  <b>用語：</b>PD＝人日；BE／FE＝後端／前端工程師；OPS＝營運。<br>
+  <b>口徑：</b>人日只計 DigiQuick 的投入，等待第三方的時間另列。「改造」指在現有平台上改造（作為基準）；「從零」指主要模組從零建置。
+</div>
+
+<nav>
+  <b>目錄</b>
+  <ol>
+    <li><a href="#s1">各階段總表、角色配置與估算假設</a></li>
+    <li><a href="#s2">工作量表（A／B／C）、人工步驟與依賴</a></li>
+    <li><a href="#s3">改造與從零的對比</a></li>
+    <li><a href="#s4">兩人的共同結論、分歧與待確認問題</a></li>
+    <li><a href="#s5">附錄：已核對的平台能力</a></li>
+  </ol>
+</nav>
+
+<h2 id="s1">一、各階段總表</h2>
+
+<div class="table-wrap"><table>
+<thead><tr><th>階段</th><th>口徑</th><th class="num">改造 PD</th><th class="num">從零 PD</th><th>角色配置</th><th>日曆週數</th></tr></thead>
+<tbody>
+<tr><td><b>A 技術驗證版</b></td><td>累計</td><td class="num"><b>54–84</b></td><td class="num">70–105</td><td>PM 0.3、BA 0.3、BE 2、FE 0.3、QA 0.3、DevOps 0.1</td><td>用 mock 6–8 週；Aegis dev 可用後再加 2–3 週</td></tr>
+<tr><td><b>B 首筆正式發行版</b></td><td><b>增量</b>（A 之後）</td><td class="num"><b>134–205</b><br><span class="meta">工程 87–134＋非工程 47–71</span></td><td class="num">178–263</td><td>PM 0.5、BA／合規 0.5、BE 2、FE 1.5、QA 1、DevOps 0.2、OPS 0.5–1；峰值約 6 人</td><td>A 結束後 14–20 週（開發 6–9、UAT 3–4、彩排 1–2、發行窗口 2–3、hypercare 2–3，部分重疊）</td></tr>
+<tr class="total"><td>A＋B 首發</td><td><b>累計</b></td><td class="num">188–289</td><td class="num">248–368</td><td>平均 2.5–3 FTE</td><td><b>全案 20–26 週</b>（前提：Aegis dev 在第 6 週左右、主網在第 17–19 週左右可用）</td></tr>
+<tr><td>B 之後的補件</td><td>增量</td><td class="num">9–15</td><td class="num">9–15</td><td>BE</td><td>首次付息或轉讓前完成</td></tr>
+<tr><td><b>C 可重複發行版</b></td><td><b>增量</b>（相對 B）</td><td class="num"><b>62–100</b></td><td class="num">75–120</td><td>BE 2、FE 1、QA 0.5、PM 0.4</td><td>B 的 hypercare 結束後 6–10 週</td></tr>
+</tbody></table></div>
+
+<h3>每新增一筆發行的營運人日</h3>
+<div class="table-wrap"><table>
+<thead><tr><th>情況</th><th class="num">B 模式（人工）</th><th class="num">C 模式</th></tr></thead>
+<tbody>
+<tr><td>既有發行人、既有投資人</td><td class="num">4–9 PD</td><td class="num">2–3 PD</td></tr>
+<tr><td>新發行人、20 位以上新投資人</td><td class="num">7–12 PD</td><td class="num">3–5 PD</td></tr>
+</tbody></table></div>
+<p>此外，Aegis 依序審核還要等 3–7 個工作天的日曆時間，首發約 5–10 個工作天。</p>
+
+<h3>另列、不計入基準的項目</h3>
+<ul>
+  <li>Aegis 返工預備：+10–20 PD，因為 API 還沒實作。觸發條件：A 階段過半時 Aegis dev 環境仍不可用。</li>
+  <li>自然人投資人：+6–10 PD。</li>
+  <li>開放線上申購：+6–10 PD（B4、B9 各加 3–5）。</li>
+  <li>如果只有 1 名全端工程師：工程部分約 145–215 PD，日曆要 7–10 個月以上。</li>
+</ul>
+
+<h3>估算假設</h3>
+<ul>
+  <li>首發投資人是<b>法人</b>，沿用現有「公司＋聯絡人」註冊，投資人不選資產類型。</li>
+  <li>APP 只做唯讀：申購、分配、付款都由 OPS 在 admin 代錄並附憑證。</li>
+  <li>付款一律人工；平台只記錄，並做雙人覆核。</li>
+  <li>不開放外部地址（要等 Aegis 主網 KYT）。</li>
+  <li>付息由付款代理計算。</li>
+</ul>
+
+<div class="callout"><b>首發日期取決於 Aegis 三個環境的交付日期和律師文件定稿，不取決於 DigiQuick 的開發。</b></div>
+
+<h2 id="s2">二、工作量表（改造口徑）</h2>
+<p>
+  <b>標記：</b>
+  <span class="tag t-reuse">重用</span> 已讀過程式碼、確認可重用｜
+  <span class="tag">待開發</span> 要新寫｜
+  <span class="tag t-aegis">Aegis</span> 依賴 Aegis 交付
+</p>
+
+<h3>A 技術驗證版（累計 54–84 PD）</h3>
+<div class="table-wrap"><table>
+<thead><tr><th>工作包</th><th>交付物</th><th>負責方</th><th>投入角色</th><th class="num">PD</th><th>前置依賴</th><th>驗收條件</th></tr></thead>
+<tbody>
+<tr><td>A1 Aegis 介面釐清 <span class="tag t-aegis">Aegis</span></td><td>問題清單、各環境日程</td><td>DQ</td><td>PM</td><td class="num">4–6</td><td>—</td><td>每個問題都有回覆，或已登記為風險</td></tr>
+<tr><td>A2 狀態機、referenceId 規則、錯誤決策表 <span class="tag">待開發</span></td><td>設計文件</td><td>DQ</td><td>BE、BA</td><td class="num">4–6</td><td>A1</td><td>涵蓋指南 §5、§6、§11</td></tr>
+<tr><td>A3 Aegis client（RSA-PSS 簽章、path 含 query string、限流） <span class="tag">待開發</span></td><td>client 模組</td><td>DQ</td><td>BE</td><td class="num">4–6</td><td>A2</td><td>mock 和 dev 驗簽都通過</td></tr>
+<tr><td>A4 請求表與 webhook（去重、seq 比較） <span class="tag t-reuse">重用：<code>file-upload.controller.ts</code></span></td><td>資料表、controller</td><td>DQ</td><td>BE</td><td class="num">5–8</td><td>A2</td><td>重複、亂序、跳號都測過</td></tr>
+<tr><td>A5 輪詢與漏收補償 cron <span class="tag t-reuse">重用：<code>register-cron-jobs.ts</code></span></td><td>cron job</td><td>DQ</td><td>BE</td><td class="num">4–6</td><td>A3、A4</td><td>關掉 webhook 後仍能到達終態</td></tr>
+<tr><td>A6 編排 ①–⑫ 和 BURN（BE 腳本） <span class="tag t-aegis">Aegis</span></td><td>編排腳本</td><td>DQ</td><td>BE</td><td class="num">8–12</td><td>A3–A5</td><td>testnet 全部走通，ConfluxScan 查得到每筆交易</td></tr>
+<tr><td>A7 資料模型與 migration <span class="tag t-reuse">改造：<code>bond-asset.ts</code>、<code>company.ts</code></span></td><td>migration</td><td>DQ</td><td>BE</td><td class="num">5–8</td><td>A2</td><td>可執行也可回滾；既有 8 種資產不受影響</td></tr>
+<tr><td>A8 Aegis mock server <span class="tag">待開發</span></td><td>mock server</td><td>DQ</td><td>BE、QA</td><td class="num">5–8</td><td>A2</td><td>409、429、TIMEOUT、UNKNOWN、亂序都能注入</td></tr>
+<tr><td>A9 admin 最小面板；bond 隱藏舊的 Mint 按鈕 <span class="tag t-reuse">改造</span></td><td>面板</td><td>DQ</td><td>FE</td><td class="num">4–6</td><td>A6</td><td>營運能走完 testnet 流程</td></tr>
+<tr><td>A10 三方對帳腳本 <span class="tag t-aegis">Aegis：holders API</span></td><td>腳本</td><td>DQ</td><td>BE</td><td class="num">3–5</td><td>A6</td><td>鏈上、Aegis、DB 三方一致</td></tr>
+<tr><td>A11 修好 jest 並補測試 <span class="tag">現況：測試壞掉</span></td><td>測試套件</td><td>DQ</td><td>QA、BE</td><td class="num">6–9</td><td>A3–A8</td><td>關鍵路徑和異常案例全部覆蓋</td></tr>
+<tr><td>A12 dev 金鑰、固定出口 IP、webhook URL <span class="tag t-aegis">Aegis</span></td><td>環境設定</td><td>DQ</td><td>DevOps</td><td class="num">2–4</td><td>Aegis dev</td><td><code>/v1/me</code> 呼叫成功</td></tr>
+<tr class="total"><td colspan="4">A 合計（累計）</td><td class="num">54–84</td><td colspan="2">從零口徑：70–105</td></tr>
+</tbody></table></div>
+
+<h3>B 首筆正式發行版（增量 134–205 PD）</h3>
+<div class="table-wrap"><table>
+<thead><tr><th>工作包</th><th>交付物</th><th>負責方</th><th>投入角色</th><th class="num">PD</th><th>前置依賴</th><th>驗收條件</th></tr></thead>
+<tbody>
+<tr><td>B1 雙角色註冊（法人） <span class="tag t-reuse">改造：<code>sign-up-service.ts</code>、<code>PendingKyc/*</code></span></td><td>角色旗標、KYC 分支</td><td>DQ</td><td>BE、FE</td><td class="num">8–12</td><td>A</td><td>兩種角色都能完成 KYC</td></tr>
+<tr><td>B2 KYC 錢包步驟改成觸發 Aegis 開戶 <span class="tag t-reuse">重用：<code>assign-wallet-address.ts</code></span></td><td>自動開戶與回填錢包地址</td><td>DQ（Aegis 核准）</td><td>BE</td><td class="num">3–6</td><td>B1</td><td>取得 clientId 和錢包</td></tr>
+<tr><td>B3 Offering 狀態機 <span class="tag">待開發</span></td><td>模型與狀態機</td><td>DQ</td><td>BE</td><td class="num">5–8</td><td>A</td><td>狀態只能往前推進</td></tr>
+<tr><td>B4 admin 代錄申購 <span class="tag">待開發</span></td><td>代錄 API</td><td>DQ</td><td>BE</td><td class="num">2–3</td><td>B3</td><td>代錄有稽核紀錄</td></tr>
+<tr><td>B5 分配 CSV 匯入與核准 <span class="tag">待開發</span></td><td>匯入與校驗</td><td>DQ</td><td>BE</td><td class="num">4–6</td><td>B4</td><td>分配合計等於發行量</td></tr>
+<tr><td>B6 付款記錄、回單、mint 前檢查 <span class="tag t-reuse">重用：S3 上傳</span></td><td>付款模組</td><td>DQ</td><td>BE</td><td class="num">4–6</td><td>B5</td><td>未付款的投資人不能進入 mint 批次</td></tr>
+<tr><td>B7 Holding 登記冊與快照 <span class="tag">待開發</span></td><td>登記冊表</td><td>DQ</td><td>BE</td><td class="num">5–8</td><td>A10</td><td>和 holders API 一致</td></tr>
+<tr><td>B8 輕量雙人覆核（分配、付款、mint 或 burn） <span class="tag t-reuse">擴充：<code>auth.ts</code>、<code>permission.ts</code></span></td><td>核准流程</td><td>DQ</td><td>BE、FE</td><td class="num">4–6</td><td>B5、B6</td><td>同一人無法既提交又核准</td></tr>
+<tr><td>B9 app 唯讀頁與修 <code>asset(id)</code> 越權讀取 <span class="tag t-reuse">改造：<code>query.asset.ts</code></span></td><td>投資人頁、發行人頁</td><td>DQ</td><td>FE、BE</td><td class="num">12–16</td><td>B5–B7</td><td>越權讀取測試讀不到資料</td></tr>
+<tr><td>B10 admin 主控台（代錄、付款覆核、例外佇列） <span class="tag t-reuse">改造</span><br><span class="meta"><code>PaymentPending</code> 只有空殼</span></td><td>admin 頁面</td><td>DQ</td><td>FE</td><td class="num">10–16</td><td>B3–B8</td><td>營運不必直接動資料庫</td></tr>
+<tr><td>B11 Aegis 後台事件落地（暫停、凍結、強制轉移） <span class="tag t-aegis">Aegis</span></td><td>事件紀錄與告警</td><td>DQ</td><td>BE</td><td class="num">3–5</td><td>A4</td><td>每種事件都有告警</td></tr>
+<tr><td>B12 email 範本（分配、到帳、交付） <span class="tag t-reuse">重用：<code>core/email</code></span></td><td>範本</td><td>DQ</td><td>BE</td><td class="num">0–3</td><td>—</td><td>範本已覆核</td></tr>
+<tr><td>B13 KMS、稽核日誌、個資保護 <span class="tag">待開發</span></td><td>金鑰管理與稽核</td><td>DQ</td><td>BE、DevOps</td><td class="num">6–9</td><td>A12</td><td>env 沒有明文私鑰</td></tr>
+<tr><td>B14 對帳匯出（人工比對）</td><td>CSV</td><td>DQ</td><td>BE、OPS</td><td class="num">3–5</td><td>B7</td><td>差異報告已簽核</td></tr>
+<tr><td>B15 stg 端到端、8 種資產回歸、UAT、主網彩排 <span class="tag t-aegis">Aegis</span></td><td>UAT 簽核、實測的審核時長</td><td>DQ（發行人參與）</td><td>QA、OPS</td><td class="num">12–18</td><td>Aegis stg、主網</td><td>UAT 簽核</td></tr>
+<tr><td>B16 主網設定與監控 <span class="tag t-reuse">改造：<code>network.ts</code> 目前只有 testnet</span></td><td>告警</td><td>DQ</td><td>DevOps</td><td class="num">5–8</td><td>主網憑證</td><td>告警演練有觸發</td></tr>
+<tr class="total"><td colspan="4">工程小計</td><td class="num">87–134</td><td colspan="2"></td></tr>
+<tr><td>B17 SOP、runbook、培訓</td><td>文件、演練紀錄</td><td>DQ</td><td>OPS、合規</td><td class="num">6–9</td><td>B18b</td><td>桌面演練並留紀錄</td></tr>
+<tr><td>B18a 項目管理</td><td>計畫、RACI、go/no-go</td><td>DQ</td><td>PM</td><td class="num">15–20</td><td>—</td><td>各方簽核 go/no-go</td></tr>
+<tr><td>B18b 需求與七大流程設計</td><td>泳道圖、例外決策表</td><td>DQ</td><td>BA、合規</td><td class="num">8–12</td><td>律師初稿</td><td>律師、付款代理、Aegis 都確認</td></tr>
+<tr><td>B18c 外部對接（Aegis、律師、付款代理、發行人）</td><td>日程、作業備忘</td><td>DQ</td><td>PM、BA</td><td class="num">8–12</td><td>—</td><td>日程寫進計畫</td></tr>
+<tr><td>B19 首發執行</td><td>執行清單</td><td>DQ（Aegis 審核）</td><td>OPS、BE</td><td class="num">4–8</td><td>以上全部</td><td>三方對帳簽核</td></tr>
+<tr><td>B20 hypercare（2–3 週）</td><td>問題日誌</td><td>DQ</td><td>BE、OPS</td><td class="num">6–10</td><td>B19</td><td>連續 5 天沒有未解釋的差異</td></tr>
+<tr class="total"><td colspan="4">非工程小計</td><td class="num">47–71</td><td colspan="2"></td></tr>
+<tr class="total"><td colspan="4">B 合計（增量）</td><td class="num">134–205</td><td colspan="2">從零口徑：178–263</td></tr>
+<tr><td>B 之後的補件：付息快照與付款記錄、贖回 burn、BURN_AND_MINT <span class="tag t-aegis">Aegis</span></td><td>補件模組</td><td>DQ</td><td>BE</td><td class="num">9–15</td><td>B19</td><td>首次付息或轉讓前完成</td></tr>
+</tbody></table></div>
+
+<h3>C 可重複發行版（增量 62–100 PD）</h3>
+<div class="table-wrap"><table>
+<thead><tr><th>工作包</th><th class="num">PD</th></tr></thead>
+<tbody>
+<tr><td>自動編排、自動切批、retryable 自動重試</td><td class="num">8–12</td></tr>
+<tr><td>發行模板與條款版本管理</td><td class="num">6–10</td></tr>
+<tr><td>批量開戶（超過 50 位投資人）</td><td class="num">5–8</td></tr>
+<tr><td>通用 maker-checker、營運主控台、webhook 重送 UI</td><td class="num">6–10</td></tr>
+<tr><td>自動報表</td><td class="num">6–10</td></tr>
+<tr><td>系統化付息</td><td class="num">8–12</td></tr>
+<tr><td>系統化贖回</td><td class="num">4–6</td></tr>
+<tr><td>CI 加入測試和 migration</td><td class="num">7–12</td></tr>
+<tr><td>UAT、PM</td><td class="num">12–20</td></tr>
+<tr class="total"><td>C 合計（增量）</td><td class="num">62–100</td></tr>
+</tbody></table></div>
+
+<h3>各環節的人工做法與系統化增量</h3>
+<p>「人工做法」是 B 的基準；「系統化」是相對人工做法多出的開發人日。</p>
+<div class="table-wrap"><table>
+<thead><tr><th>環節</th><th>B 的基準做法</th><th>系統化：多出的開發 PD</th><th>未定事項（列為估算假設）</th></tr></thead>
+<tbody>
+<tr><td>認購</td><td>投資人線下申購，OPS 在 admin 代錄並附文件</td><td>app 自助認購：+6–10</td><td>認購文件的形式、簽署方式；是否要專業投資者認定</td></tr>
+<tr><td>分配</td><td>安排行出 Excel → CSV 匯入 → 系統校驗 → 雙人核准</td><td>自動配售規則：+6–10（延後）</td><td>簿記由誰做</td></tr>
+<tr><td>付款與交收</td><td>付款人工；admin 錄入到帳並上傳回單，雙人覆核；先款後券</td><td>銀行對帳單自動比對：+10–15（不在範圍）</td><td>收款帳戶屬於誰；部分到帳的處理；T+幾天交付</td></tr>
+<tr><td>持有人紀錄</td><td>系統化 <code>Holding</code> 登記冊，加上人工三方比對</td><td>每日自動對帳工具：+3–4（放在 C）</td><td>鏈下登記冊和鏈上哪一個是權威；登記處由誰擔任</td></tr>
+<tr><td>付息</td><td>付款代理計算並付款；平台提供記錄日快照，OPS 錄入付款記錄</td><td>計息引擎：+8–12（浮息再加 3–5，放在 C）</td><td>由付款代理還是 DigiQuick 計算</td></tr>
+<tr><td>贖回</td><td>本金付款確認後，在雙人核准下送 BATCH_BURN</td><td>贖回事件自動化：+4–6（放在 C）</td><td>能否提前贖回</td></tr>
+<tr><td>轉讓、更正</td><td>收到書面指示後送 BURN_AND_MINT</td><td>投資人在 app 發起轉讓：+8–12（延後）</td><td>首發是否允許轉讓</td></tr>
+</tbody></table></div>
+
+<h3>人工步驟：執行人、覆核人與完成憑證</h3>
+<div class="table-wrap"><table>
+<thead><tr><th>步驟</th><th>執行人</th><th>覆核人</th><th>完成憑證</th></tr></thead>
+<tbody>
+<tr><td>投資人 KYC 與專業投資者認定</td><td>合規</td><td>合規主管</td><td>KYC 結論文件；admin 的 KYC 紀錄</td></tr>
+<tr><td>Aegis 客戶申請與錢包核准的跟進</td><td>OPS</td><td>營運主管</td><td>Aegis <code>clientId</code>、<code>walletId</code>；Aegis 審批紀錄</td></tr>
+<tr><td>分配表定稿</td><td>安排行出表、OPS 錄入</td><td>營運主管（系統雙人覆核）</td><td>簽署版分配表；系統合計檢查紀錄</td></tr>
+<tr><td>付款確認</td><td>OPS</td><td>另一位 OPS 或財務</td><td>銀行入帳回單或付款代理到帳清單（上傳到 S3）</td></tr>
+<tr><td>部署、角色、allowlist、mint 的觸發</td><td>OPS 發起、BE 執行腳本</td><td>營運主管</td><td>Aegis 審批紀錄、requestId、txHash、ConfluxScan 連結</td></tr>
+<tr><td>三方對帳</td><td>OPS</td><td>營運主管</td><td>登記冊快照、holders CSV、Aegis 託管帳單、差異說明</td></tr>
+<tr><td>付息（記錄日）</td><td>付款代理</td><td>OPS</td><td>記錄日快照、付款完成報告</td></tr>
+<tr><td>贖回</td><td>付款代理付款，OPS 觸發 BURN</td><td>營運主管</td><td>付款回單、burn 的 txHash、登記冊註銷快照</td></tr>
+<tr><td>暫停、凍結、強制轉移</td><td>Aegis 後台（依書面指示）</td><td>合規</td><td>書面指示、webhook 紀錄、<code>/v1/operations</code> 查詢結果</td></tr>
+</tbody></table></div>
+
+<h3>依賴：DigiQuick 投入、第三方投入與日曆等待</h3>
+<div class="table-wrap"><table>
+<thead><tr><th>依賴</th><th>DQ 投入</th><th>第三方投入</th><th>日曆等待</th></tr></thead>
+<tbody>
+<tr><td>Aegis dev（含 SPEC.md）</td><td>6–10 PD</td><td>實作 API、核發憑證</td><td><b>未定</b>，指南只寫「實作完成後提供」</td></tr>
+<tr><td>Aegis stg</td><td>含在 B15</td><td>部署、testnet 審核</td><td>預計 dev 之後 2–4 週</td></tr>
+<tr><td>Aegis 主網（含憑證、MASTER_KEY、CFX）</td><td>含在 B15、B16</td><td>每筆人工審核</td><td>首發 5–10 個工作天（至少 8–9 筆依序審核，角色指派一次只能處理一筆）</td></tr>
+<tr><td>Aegis 主網 KYT</td><td>0（首發不開放外部地址）</td><td>接上 Conflux KYT</td><td>未定</td></tr>
+<tr><td>DigiQuick 測試環境</td><td>DevOps 2–4 PD</td><td>—</td><td>固定出口 IP、HTTPS webhook URL 約 1 週</td></tr>
+<tr><td>律師文件</td><td>3–5 PD</td><td>條款、登記冊安排、ISIN</td><td><b>4–8 週</b>，最長的非技術路徑</td></tr>
+<tr><td>付款或交收機構</td><td>2–4 PD</td><td>到帳清單格式、付息作業</td><td>2–4 週</td></tr>
+<tr><td>發行人</td><td>2–4 PD</td><td>資料、簽署、條款確認</td><td>1–3 週</td></tr>
+<tr><td>投資人開戶</td><td>每人 0.2–0.4 PD</td><td>Aegis 逐筆核准</td><td>2–3 週，和 UAT 並行</td></tr>
+</tbody></table></div>
+
+<ul>
+  <li><b>關鍵路徑：</b>Aegis dev → A 真環境驗證 → Aegis stg → UAT → 主網憑證 → 主網彩排 → 投資人開戶 → 首發執行。律師條款要在彩排前定稿。</li>
+  <li><b>可並行：</b>律師、付款代理的工作和 A 同時做；B1–B10 和 Aegis 聯調同時做；投資人開戶和 UAT 後段同時做；SOP 和測試同時做。</li>
+</ul>
+
+<h2 id="s3">三、改造與從零的對比</h2>
+<p>A＋B 合計：改造 188–289 PD，從零 248–368 PD，差約 60–80 PD。差異最大的三個工作包：</p>
+<div class="table-wrap"><table>
+<thead><tr><th>工作包</th><th class="num">改造</th><th class="num">從零</th><th class="num">差距</th><th>原因</th></tr></thead>
+<tbody>
+<tr><td>B9 app 唯讀頁與授權修補</td><td class="num">12–16</td><td class="num">26–34</td><td class="num">+14–18</td><td>改造時可用現成的 app 外殼、登入、選單、Table 元件和 codegen</td></tr>
+<tr><td>B1 雙角色註冊</td><td class="num">8–12</td><td class="num">20–30</td><td class="num">+12–18</td><td>改造時沿用 <code>sign-up-service.ts</code>；投資人不選資產類型時，KYC 會自然跳過資產類型審核（<code>company.ts</code> 的 <code>every()</code> 對空清單回傳 true）</td></tr>
+<tr><td>B10 admin 主控台</td><td class="num">10–16</td><td class="num">20–28</td><td class="num">+10–14</td><td>改造時可用 admin 外殼、<code>auth.ts</code>、<code>permission.ts</code> 和表格元件</td></tr>
+</tbody></table></div>
+<p>Aegis 整合核心（A3–A6、A8）兩種口徑幾乎相同，因為現有平台沒有可重用的部分。</p>
+
+<h2 id="s4">四、兩人的共同結論、分歧與待確認問題</h2>
+
+<h3>共同結論</h3>
+<div class="callout ok">
+<ol>
+  <li>首發採「APP 只讀、admin 代錄、輕量雙人覆核」。投資人和發行人走同一套註冊流程，在 APP 上看得到認購、分配、付款狀態和持倉。</li>
+  <li><b><code>asset(id)</code> 目前任何登入的客戶都能讀任何資產（原始碼標了 <code>TODO: auth</code>）</b>，投資人上平台前必須修，已計入 B9。</li>
+  <li>雙人覆核在首發必須寫進系統，只做三個關鍵動作：分配核准、付款確認、mint 或 burn 的觸發。通用框架放到 C。</li>
+  <li>編排由 BE 執行腳本，admin 保留唯讀的請求列表。BURN 要在 A 階段驗證；BURN_AND_MINT、付息工具和系統化贖回延後。</li>
+  <li>Aegis 返工預備 +10–20 PD 另列，不放進基準。</li>
+  <li>工程師第一輪的 A＋B 是 179–277 PD，第二輪改報 85–128 PD 後自行撤回：那是把 A、B 的工程混在一起算，又漏掉幾項。最終雙方都採用 PM 合併表的口徑。</li>
+</ol>
+</div>
+
+<h3>尚有分歧（影響都不大）</h3>
+<div class="table-wrap"><table>
+<thead><tr><th>項目</th><th>工程師</th><th>PM</th><th>影響</th></tr></thead>
+<tbody>
+<tr><td>B10 要不要做發行步驟面板</td><td>不做，10–14</td><td>做，12–16</td><td>±2 PD</td></tr>
+<tr><td>B12 email</td><td>1–3</td><td>0–2</td><td>±1 PD</td></tr>
+<tr><td>B 的日曆週數</td><td>15–20</td><td>14–18</td><td>要等主網審核時長實測後再定</td></tr>
+<tr><td>每新增一筆發行（B 模式）</td><td>4–7</td><td>5–9</td><td>差在代錄工作量</td></tr>
+</tbody></table></div>
+
+<h3>排期前需要確認的問題</h3>
+<div class="table-wrap"><table>
+<thead><tr><th>對象</th><th>問題</th></tr></thead>
+<tbody>
+<tr><td><b>DigiQuick</b></td><td><ol>
+  <li>首發投資人是法人還是自然人？大約多少人？</li>
+  <li>是否接受首發不開放線上申購？</li>
+  <li>KYC 和專業投資者認定由誰做？</li>
+  <li>鏈下登記冊和鏈上，哪一個是權威？登記處由誰擔任？</li>
+  <li>收款帳戶屬於誰？交付時限是 T+幾天？部分到帳怎麼處理？</li>
+  <li>首發是否允許轉讓或提前贖回？</li>
+  <li><code>incorporationNo</code> 能否沿用註冊時填的 Business Tax ID？</li>
+  <li>OPS 和合規的人力有多少？目標發行日期是？</li>
+</ol></td></tr>
+<tr><td><b>Aegis</b></td><td><ol>
+  <li>SPEC.md 何時提供（deployment body、6 個角色、CMTAT 版本與審計、decimals）？</li>
+  <li>dev、stg、主網的確切交付日期，以及每筆審核的 SLA 和吞吐量。</li>
+  <li>法人投資人應該用哪一種 client kind？</li>
+  <li>同一家公司既是發行人也是投資人時，要開兩個 client 嗎？</li>
+  <li>客戶申請能否自動核准？</li>
+  <li>CFX gas 由誰支付、誰補充？</li>
+  <li>主網 KYT 的時程。</li>
+  <li>Aegis onboarding 的 KYC 結果能否直接作為投資人 KYC 的依據？</li>
+</ol></td></tr>
+<tr><td><b>律師、付款代理及其他</b></td><td><ol>
+  <li>條款何時定稿？代幣和登記冊的法律關係？強制轉移的依據？ISIN 何時取得？</li>
+  <li>到帳清單和記錄日快照的格式？付息和贖回的作業時限？</li>
+  <li>是否要做滲透測試（OZ R02.4）？由誰做、排在何時？</li>
+</ol></td></tr>
+</tbody></table></div>
+
+<h2 id="s5">五、附錄：已核對的平台能力（唯讀核對）</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>能力</th><th>檔案（相對於各 repo）</th><th>結論</th></tr></thead>
+<tbody>
+<tr><td>註冊</td><td><code>digiquick-api/core/company/services/sign-up-service.ts</code>；app 的 <code>pages/signUp/*</code></td><td>只有「公司＋聯絡人」一種註冊方式，必填公司資料，且至少要選 1 個資產類型。投資人可用同一流程註冊，但要加角色旗標，並允許不選資產類型</td></tr>
+<tr><td>帳戶模型</td><td><code>database/entities/account.ts</code>、<code>customer.ts</code>；<code>core/account/models/role.enum.ts</code></td><td>每個 Customer 都必須屬於一家公司；Role 只有 ADMIN、THIRD_PARTY、CUSTOMER；沒有發行方或投資人的角色區分</td></tr>
+<tr><td>KYC</td><td><code>core/company/models/kyc-step.enum.ts</code>、<code>assign-wallet-address.ts</code></td><td>步驟是：審公司 → 審資產類型 → 指派錢包地址 → APPROVED。「指派錢包」這一步可以改成觸發 Aegis 開戶</td></tr>
+<tr><td>公司欄位</td><td><code>database/entities/company.ts</code></td><td>只有單一的 <code>walletAddress</code>，沒有 <code>incorporationNo</code>，也沒有投資人的生日和國籍</td></tr>
+<tr><td>資產查詢權限</td><td><code>core/asset/resolvers/query.asset.ts</code></td><td><code>assets</code> 對 CUSTOMER 只查自己公司；<b><code>asset(id)</code> 沒有限制公司，任何登入的客戶都能讀任何資產（安全缺陷）</b></td></tr>
+<tr><td>bond 資料</td><td><code>database/entities/bond-asset.ts</code></td><td>35 個欄位可以重用；缺 ISIN、decimals、記錄日、條款文件 ID</td></tr>
+<tr><td>權限</td><td><code>core/account/models/permission.ts</code>、<code>common/graphql/auth.ts</code></td><td>可以擴充，但沒有 maker-checker</td></tr>
+<tr><td>REST 與 cron</td><td><code>core/file-upload/controllers/file-upload.controller.ts</code>、<code>apps/listener/src/register-cron-jobs.ts</code></td><td>webhook 和輪詢可以沿用現有骨架</td></tr>
+<tr><td>網路設定</td><td><code>common/providers/network.ts</code></td><td>只設了 Conflux eSpace testnet（chain 71），缺主網</td></tr>
+<tr><td>admin 營運頁</td><td>admin 的 <code>components/PaymentPending</code>、<code>Withdrawal</code></td><td>只有表頭，沒有資料來源</td></tr>
+<tr><td>測試與 CI</td><td><code>apps/main/test/app.e2e-spec.ts</code>、<code>.github/workflows/*</code></td><td>e2e 測試引用不存在的模組，跑不起來；CI 只做 build 和 push</td></tr>
+</tbody></table></div>
+
+<footer>本文件為估算與分析，不構成承諾；所有數字都以排期前對第四節問題的回覆為前提，屆時需要重新校準。</footer>
+</main>
+</body>
+</html>
