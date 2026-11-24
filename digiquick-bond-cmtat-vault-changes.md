@@ -17,7 +17,7 @@ bond 改成由冷錢包系統部署和操作 CMTAT 合約，DigiQuick 不再持�
 | 登記 | 鏈下持有人登記冊（權威）、三方對帳、記錄日快照 | 提供鏈上持有人、餘額、凍結狀態查詢 |
 | 生命週期 | bond 狀態機、轉讓、修改條款、付息資料、到期贖回 | 暫停、凍結、強制轉移、停用（只能在 Aegis 後台操作） |
 | 送出業務意圖 | 產生 referenceId、送請求、接 webhook、輪詢對帳 | 人工審核、簽名、廣播、記帳 |
-| 私鑰與簽名 | 只有呼叫 API 用的 RSA 金鑰 | 所有錢包的私鑰、離線簽名、廣播；gas 從發行方錢包的 CFX 扣（指南 §7.1） |
+| 私鑰與簽名 | 只有呼叫 API 用的 RSA 金鑰 | 所有錢包的私鑰、離線簽名、廣播；gas 由 Aegis 負擔並補充 |
 
 ## 2. 已定的前提
 
@@ -43,7 +43,7 @@ bond 新增 `issuanceChannel = VAULT_CMTAT` 後，下列程式對 bond 不再使
 | 交易請求表：逾時作廢、可以重送 | `digiquick-api/core/asset/services/asset-transaction-service.ts` | 另建 `VaultRequest` 表。冷錢包的 `TIMEOUT` 不是最終狀態，不能換 referenceId 重送 |
 | listener 掃 TokenFactory 的交易和轉帳事件 | `core/contract-activity-task/tasks/transaction.ts`、`token-transfer-event.ts` | webhook 加上輪詢查詢 |
 | metadata 上傳 IPFS、選 escrow 收款地址 | `core/asset/services/prepare-asset-deployment-service.ts` | 上傳條款 PDF；合約資訊用 `SET_INFORMATION`；收款對象是投資人託管錢包 |
-| gas 價格、手續費 cron、ETH/USD 匯率 | `gas-price-provider.ts`、`cron-update-asset-transaction-fees.ts` | 不需要；改成監控冷錢包錢包的 CFX 餘額 |
+| gas 價格、手續費 cron、ETH/USD 匯率 | `gas-price-provider.ts`、`cron-update-asset-transaction-fees.ts` | 不需要 |
 | `Asset.status` 依鏈上交易推導 | `core/asset/models/asset.ts` 的 `get status()` | 加 CMTAT 分支，依 bond 生命週期與冷錢包請求推導（第 6 節） |
 | admin、發行方、第三方用 `signMessage` 簽「資產內容證明」 | `AssetReviewBtn.tsx`、`AssetAcknowledgeBtn.tsx`、`core/asset/services/sign-asset-service.ts` | 改成 DigiQuick 內部雙人覆核；內容雜湊值用 `SET_INFORMATION` 寫上鏈 |
 | 公司登記 MetaMask 地址（KYC 步驟 `ASSIGNING_WALLET_ADDRESS`） | `core/company/services/assign-wallet-address.ts` | 改成等冷錢包建好託管錢包（第 4 節） |
@@ -247,7 +247,6 @@ stateDiagram-v2
 - [ ] 個人 INVESTOR 申請時，除了指南 §7.2 的四個欄位，Aegis 審核還需要哪些資料或文件（例如證件影本、住址證明）？
 - [ ] CMTAT 3.0.0 的細節（目前指南沒有寫）：部署的 request body、`GRANT_ROLE` 是哪 6 個角色、審計證據、decimals。
 - [ ] 審核 SLA，以及 dev、stg、主網的交付日期。
-- [ ] CFX gas 由誰出、誰補充。
 - [ ] **鎖倉與釋放（指南 v0.6 沒有，要 Aegis 新增）**：數字債券在分配確定後 mint 到投資人託管錢包並鎖倉，DigiQuick 確認款項到帳後再釋放。需要：按錢包和數量鎖倉、解除鎖倉（都要支援批次，或併入 `BATCH_MINT`）、查詢某錢包的鎖倉數量、對應的 webhook；鎖倉中的代幣不能轉讓、提領或被 `BURN_AND_MINT` 移走。是否用 CMTAT 3.0.0 合約本身的部分凍結實作、由哪個錢包簽名？
 
 **業務**
