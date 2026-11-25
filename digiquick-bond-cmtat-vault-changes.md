@@ -1,18 +1,18 @@
 # DigiQuick bond 改用冷錢包 CMTAT：整體改動說明
 
-- 日期：2026-11-24
+- 日期：2026-11-25
 - 線上版：https://claude.ai/artifact/VjrztvJniHZbBPMqGFn9Hd
 
 ## 1. 背景與目標架構
 
 bond 改成由冷錢包系統部署和操作 CMTAT 合約，DigiQuick 不再持有任何私鑰、不再簽交易、也不再自己上鏈。DigiQuick 的角色是發行運營中樞：處理業務，再把每個業務動作轉成結構化的請求送給冷錢包；鏈上結果透過 webhook 和查詢取回。
 
-依據是冷錢包 Open API 串接指南 v0.6（`dacc_chainfusion_docs/digiquick-integration-guide-v0.6.md`），以及對 digiquick-api、digiquick-admin、digiquick-app、digiquick-contracts 四個 repo 的程式碼核對。其他 8 種資產維持原本的 TokenFactory 路徑，不受影響。
+依據是冷錢包 Open API 串接指南 v0.7（`dacc_chainfusion_docs/digiquick-integration-guide-v0.7.md`）、Aegis 對第 10 節的回覆（`dacc_chainfusion_docs/digiquick-v0.7-questions-and-answers.md`），以及對 digiquick-api、digiquick-admin、digiquick-app、digiquick-contracts 四個 repo 的程式碼核對。其他 8 種資產維持原本的 TokenFactory 路徑，不受影響。
 
 | 職責 | DigiQuick | 冷錢包系統（Aegis） |
 | --- | --- | --- |
 | 簿記配售 | 開放認購、收認購單、分配、檢查發行量與最低面額 | — |
-| 身份合規 | 發行方公司 KYC、個人投資人 KYC 與資格審核、決定 allowlist 的開或關 | 審核客戶申請；登記外部地址時做 KYT |
+| 身份合規 | 發行方公司 KYC、機構與個人投資人 KYC 與資格審核、決定 allowlist 的開或關 | 審核客戶申請；登記外部地址時做 KYT |
 | 交割編排 | 分配後開 allowlist、付款確認後才 mint、分批、排序 | 執行 allowlist 與 mint |
 | 登記 | 鏈下持有人登記冊（權威）、三方對帳、記錄日快照 | 提供鏈上持有人、餘額、凍結狀態查詢 |
 | 生命週期 | bond 狀態機、轉讓、修改條款、付息資料、到期贖回 | 暫停、凍結、強制轉移、停用（只能在 Aegis 後台操作） |
@@ -21,19 +21,19 @@ bond 改成由冷錢包系統部署和操作 CMTAT 合約，DigiQuick 不再持�
 
 ## 2. 已定的前提
 
-- **投資人只收個人**，不收機構；發行方是公司。
-- **發行方和投資人用同一個註冊入口**：註冊時先選身份。發行方沿用現有的公司註冊（`Company` 加上員工帳號 `Customer`）；個人投資人走新的個人分支，不建立公司（第 4 節）。
-- **兩種用戶都在 APP（digiquick-app）看到發行和認購的債權狀況**，各自只看得到自己有權看的部分（第 5 節）。
+- **投資人分機構和個人兩種**：USDSN27 的發行對象是機構投資人（Aegis 回覆第 1 題）；個人投資人分支保留。發行方是公司。
+- **發行方和投資人用同一個註冊入口**：註冊時先選身份。發行方和機構投資人都走公司註冊（`Company` 加上員工帳號 `Customer`），用 `Company.kind` 區分；個人投資人走新的個人分支，不建立公司（第 4 節）。
+- **發行方和投資人都在 APP（digiquick-app）看到發行和認購的債權狀況**，各自只看得到自己有權看的部分（第 5 節）。
 - **簽名和廣播都在冷錢包系統**：admin 和 APP 都不再連接 MetaMask 或其他錢包。
 - **只用託管錢包**：正式環境要等 Conflux 的 KYT 接上後才能登記外部地址和提領（指南 §7.2、§13），所以首發不開放外部地址。
-- **指南 v0.6 的 API 全部還沒有實作**，欄位可能微調。開發先用 mock server，Aegis dev 環境可用後再驗證。
-- 付款在鏈外：CMTAT 和冷錢包都不處理現金。**款到才 mint**：分配確定後只把獲配投資人的託管錢包加進 allowlist；DigiQuick 確認某位投資人款項到帳後，才用 `BATCH_MINT` 把代幣發到該投資人的託管錢包。代幣一經發出就是已付款的持倉，不需要鎖倉，也不需要 Aegis 新增操作（指南 v0.6 已有 `BATCH_MINT`）。
+- **指南 v0.7 仍是串接規格草稿**，欄位可能微調。開發先用 mock server，Aegis dev 環境可用後再驗證。
+- 付款在鏈外：CMTAT 和冷錢包都不處理現金。**款到才 mint**：分配確定後只把獲配投資人的託管錢包加進 allowlist；DigiQuick 確認某位投資人款項到帳後，才用 `BATCH_MINT` 把代幣發到該投資人的託管錢包。代幣一經發出就是已付款的持倉，不需要鎖倉，也不需要 Aegis 新增操作（指南已有 `BATCH_MINT`）。
   - 鏈上 `totalSupply` 會隨付款分批增加，全部付款確認後才等於實際發行量；沒有賣出或逾期取消的額度不會 mint，不必再銷毀。
   - 不採用「先 mint 再鎖倉」：要 Aegis 新增部分凍結的 API，而且付款前會有「已交付、未付款」的中間狀態。SFC 對代幣化證券沒有規定一定要鎖倉，交割方式由業務決定，但要向投資人清楚披露以哪個時點為交割完成。
   - 也不採用「先 mint 到發行持有錢包、款到再 `BURN_AND_MINT` 分給投資人」：`BURN_AND_MINT` 沒有批次版，每位投資人一筆，Aegis 的人工審核量是 `BATCH_MINT`（每筆 20 人）的 20 倍。
-- **CMTAT 採用 3.0.0 版**。
-- **冷錢包客戶對應**：每家發行方公司是一個 ISSUER 客戶；每位個人投資人是一個 INVESTOR 客戶，直接用指南 §7.2 現有的個人欄位申請，不需要 Aegis 改 API。
-- 先前「同一家公司可以同時是 ISSUER 和 INVESTOR」「不能認購自己公司發行的 bond」兩項決定，因為投資人改為只收個人而不再適用。發行方的董事、員工能不能以個人身份認購，列在第 10 節待確認。
+- **CMTAT 採用 3.0.0 Allowlist 版**，部署欄位、六個角色和 decimals 見第 7.2 節。
+- **冷錢包客戶對應**（指南 §1.1、§7.2）：每家發行方公司是一個 ISSUER 客戶（`clientType: COMPANY`）；每家機構投資人是一個 INVESTOR 客戶（`clientType: COMPANY`，填公司名稱、註冊號碼、聯絡信箱）；每位個人投資人是一個 INVESTOR 客戶（`clientType: INDIVIDUAL`，填姓、名、生日、國籍）。三種都送 `POST /v1/client-requests`，不需要 Aegis 再改 API。
+- **一個冷錢包客戶只有一個業務角色**（指南 §7.2）。DigiQuick 的一家公司也只選一種身份：`Company.kind` 是 `ISSUER` 或 `INVESTOR`，不能兩者兼具。同一家公司能不能兼任、發行方的關係人能不能認購自己公司的 bond，列在第 10 節待確認。
 
 ## 3. 要移除或繞開的既有鏈上邏輯
 
@@ -45,7 +45,7 @@ bond 新增 `issuanceChannel = VAULT_CMTAT` 後，下列程式對 bond 不再使
 | 設定 ERC20、持有期間的鏈上交易 | `AssetOwnershipBtn.tsx`、`AssetSetTimeBtn.tsx`、`handle-set-*-transaction.ts` | 不需要，CMTAT 沒有這兩種操作 |
 | 交易請求表：逾時作廢、可以重送 | `digiquick-api/core/asset/services/asset-transaction-service.ts` | 另建 `VaultRequest` 表。冷錢包的 `TIMEOUT` 不是最終狀態，不能換 referenceId 重送 |
 | listener 掃 TokenFactory 的交易和轉帳事件 | `core/contract-activity-task/tasks/transaction.ts`、`token-transfer-event.ts` | webhook 加上輪詢查詢 |
-| metadata 上傳 IPFS、選 escrow 收款地址 | `core/asset/services/prepare-asset-deployment-service.ts` | 上傳條款 PDF；合約資訊用 `SET_INFORMATION`；收款對象是投資人託管錢包 |
+| metadata 上傳 IPFS、選 escrow 收款地址 | `core/asset/services/prepare-asset-deployment-service.ts` | 上傳條款 PDF；產品說明在部署時以 `information` 寫上鏈，之後用 `SET_INFORMATION` 修改；收款對象是投資人託管錢包 |
 | gas 價格、手續費 cron、ETH/USD 匯率 | `gas-price-provider.ts`、`cron-update-asset-transaction-fees.ts` | 不需要 |
 | `Asset.status` 依鏈上交易推導 | `core/asset/models/asset.ts` 的 `get status()` | 加 CMTAT 分支，依 bond 生命週期與冷錢包請求推導（第 6 節） |
 | admin、發行方、第三方用 `signMessage` 簽「資產內容證明」 | `AssetReviewBtn.tsx`、`AssetAcknowledgeBtn.tsx`、`core/asset/services/sign-asset-service.ts` | 改成 DigiQuick 內部雙人覆核；內容雜湊值用 `SET_INFORMATION` 寫上鏈 |
@@ -53,35 +53,42 @@ bond 新增 `issuanceChannel = VAULT_CMTAT` 後，下列程式對 bond 不再使
 
 ## 4. 註冊、身份與 KYC
 
-現有註冊流程只能建立公司：`core/company/services/sign-up-service.ts` 一次建立 `Company` 和第一位 `Customer`。改成同一個入口、兩個分支：發行方沿用公司註冊，個人投資人新增個人分支。
+現有註冊流程只能建立公司：`core/company/services/sign-up-service.ts` 一次建立 `Company` 和第一位 `Customer`。改成同一個入口、三個分支：發行方和機構投資人都用公司註冊，個人投資人新增個人分支。
+
+投資方一律對應一筆 `Investor`：個人投資人的個人資料直接放在 `Investor`；機構投資人的 `Investor` 關聯到它的 `Company`。認購、分配、交割、持倉和冷錢包客戶都只認 `investorId`，不用分兩套。
 
 ### 4.1 註冊入口
 
-| 項目 | 發行方（公司） | 投資人（個人） |
-| --- | --- | --- |
-| 註冊頁 | `pages/signUp` 先選身份，再填現有的公司表單 | 先選身份，再填新的個人表單 |
-| 建立的資料 | `Company` + 第一位 `Customer` | `Investor`（個人資料） |
-| 帳號角色 | `CUSTOMER`（不變） | 新增 `INVESTOR` |
-| 新增欄位 | `incorporationNo`（申請 ISSUER 客戶需要） | 姓、名、生日、國籍（冷錢包 INVESTOR 必填）；證件類型與號碼、住址、手機、收款銀行帳戶 |
-| 帳號數量 | 可以再加員工帳號 | 一人一個帳號 |
+| 項目 | 發行方（公司） | 機構投資人 | 個人投資人 |
+| --- | --- | --- | --- |
+| 註冊頁 | `pages/signUp` 先選身份，再填現有的公司表單 | 先選身份，再填同一份公司表單 | 先選身份，再填新的個人表單 |
+| 建立的資料 | `Company`（`kind = ISSUER`）+ 第一位 `Customer` | `Company`（`kind = INVESTOR`）+ 第一位 `Customer` + `Investor`（`type = COMPANY`） | `Investor`（`type = INDIVIDUAL`，含個人資料） |
+| 帳號角色 | `CUSTOMER`（不變） | `CUSTOMER` | 新增 `INVESTOR` |
+| 新增欄位 | `incorporationNo`（冷錢包申請需要） | `incorporationNo`（冷錢包申請需要） | 姓、名、生日、國籍（冷錢包申請需要）；證件類型與號碼、住址、手機、收款銀行帳戶 |
+| 帳號數量 | 可以再加員工帳號 | 可以再加員工帳號 | 一人一個帳號 |
 
-- 帳號沿用 `Account`：email、密碼、email 驗證、重設密碼都共用。`Account` 現在關聯 `admin`、`thirdParty`、`customer` 三種身份，新增第四種 `investor`。
-- 登入：新增 `signInInvestor`，或讓 `signInCustomer` 依帳號身份回傳；JWT payload 帶 `role = INVESTOR` 和 `investorId`。
+- 帳號沿用 `Account`：email、密碼、email 驗證、重設密碼都共用。`Account` 現在關聯 `admin`、`thirdParty`、`customer` 三種身份，新增第四種 `investor`（只給個人投資人）。
+- 登入：公司帳號沿用 `signInCustomer`，JWT payload 加 `companyKind`，機構投資人另帶 `investorId`；個人投資人新增 `signInInvestor`，或讓 `signInCustomer` 依帳號身份回傳，JWT payload 帶 `role = INVESTOR` 和 `investorId`。
 - 同一個 email 只能註冊一種身份（沿用現有的 `EmailAlreadyExistsError`）。
 - 待審頁 `pages/signUp/pending.tsx` 依身份顯示目前的 KYC 步驟。
 
 ### 4.2 KYC 流程
 
-| 步驟 | 發行方（公司） | 投資人（個人） |
-| --- | --- | --- |
-| 1 | `REVIEWING_COMPANY`：公司 KYC、AML | `REVIEWING_IDENTITY`：身份證件、住址證明、AML 篩查 |
-| 2 | `REVIEWING_ASSET_TYPES`：可發行的資產類別 | `REVIEWING_INVESTOR_ELIGIBILITY`：投資人資格（是否限專業投資者待定，第 10 節） |
-| 3 | `VAULT_ONBOARDING`：申請 ISSUER 客戶，建 admin、maker、custodian、發行持有 4 個錢包 | `VAULT_ONBOARDING`：申請 INVESTOR 客戶，建託管錢包 |
-| 4 | `FINISHED`：可以提交 bond | `FINISHED`：可以認購 |
+| 步驟 | 發行方（公司） | 機構投資人 | 個人投資人 |
+| --- | --- | --- | --- |
+| 1 | `REVIEWING_COMPANY`：公司 KYC、AML | `REVIEWING_COMPANY`：公司 KYC、AML | `REVIEWING_IDENTITY`：身份證件、住址證明、AML 篩查 |
+| 2 | `REVIEWING_ASSET_TYPES`：可發行的資產類別 | `REVIEWING_INVESTOR_ELIGIBILITY`：機構投資人資格（專業投資者類別） | `REVIEWING_INVESTOR_ELIGIBILITY`：投資人資格（是否限專業投資者待定，第 10 節） |
+| 3 | `VAULT_ONBOARDING`：申請 ISSUER 客戶，建 admin、maker、custodian、發行持有 4 個錢包 | `VAULT_ONBOARDING`：申請 INVESTOR 客戶（`clientType: COMPANY`），建託管錢包 | `VAULT_ONBOARDING`：申請 INVESTOR 客戶（`clientType: INDIVIDUAL`），建託管錢包 |
+| 4 | `FINISHED`：可以提交 bond | `FINISHED`：可以認購 | `FINISHED`：可以認購 |
 
-- 公司沿用 `core/company/models/kyc-step.enum.ts`，只把 `ASSIGNING_WALLET_ADDRESS` 換成 `VAULT_ONBOARDING`。個人投資人另建 `InvestorKycStep` 和審核紀錄，不和公司的 `KycRecord` 混用。
-- `VAULT_ONBOARDING` 由系統自動送出請求，等冷錢包 webhook 回傳 `COMPLETED` 才推進。被 `REJECTED` 時回到 admin 處理，不自動重送。
-- 冷錢包申請欄位：INVESTOR 的 `firstName`、`lastName`、`birthday`、`countryOfCitizenship` 直接取自個人資料，`externalId` 用 `investor-<investorId>`；ISSUER 的 `externalId` 用 `issuer-<companyId>`。
+- 公司沿用 `core/company/models/kyc-step.enum.ts`：`ASSIGNING_WALLET_ADDRESS` 換成 `VAULT_ONBOARDING`，並新增 `REVIEWING_INVESTOR_ELIGIBILITY`；第 2 步依 `Company.kind` 分流。個人投資人另建 `InvestorKycStep` 和審核紀錄，不和公司的 `KycRecord` 混用。
+- `VAULT_ONBOARDING` 由系統自動送出請求，等冷錢包 webhook 回傳 `COMPLETED` 才推進。被 `REJECTED` 時回到 admin 處理，不自動重送；重新申請時沿用原 `externalId`、換新的 `referenceId`（指南 §7.2）。
+- 冷錢包申請欄位（指南 §7.2）：
+  - ISSUER：`clientType: COMPANY`，`companyName`、`incorporationNo`、`contactEmail` 取自 `Company`；`externalId` 用 `issuer-<companyId>`。
+  - 機構 INVESTOR：`clientType: COMPANY`（必須明傳），欄位同上；`externalId` 用 `investor-<investorId>`。
+  - 個人 INVESTOR：`clientType: INDIVIDUAL`，`firstName`、`lastName`、`birthday`、`countryOfCitizenship` 取自 `Investor`；`externalId` 用 `investor-<investorId>`。
+  - 只填該組合對應的欄位，混填會回 `400 VALIDATION_ERROR`。`externalId` 在三種申請之間不能重複，上面的前綴已保證這點。
+- 冷錢包申請端點只收建戶欄位，不收附件（Aegis 回覆第 2 題）。證件、住址證明、公司文件由 DigiQuick 在第 1、2 步自己收、自己審；Aegis 審核是否要看這些文件、怎麼提供，目前沒有定義，由 DigiQuick 提案（第 10 節）。
 - 個資保護：證件號碼、生日、住址、銀行帳戶要加密儲存並限制存取（PDPO）；admin 查看時留稽核紀錄。
 
 ## 5. 權限與資料可見範圍
@@ -91,11 +98,11 @@ bond 新增 `issuanceChannel = VAULT_CMTAT` 後，下列程式對 bond 不再使
 | 誰 | 可以看到 |
 | --- | --- |
 | 發行方 | 自己的 bond 全部狀態、認購簿、分配、交割進度、持有人、冷錢包請求進度（含審核關卡 `review.aegisStage`） |
-| 個人投資人 | 公開認購中的 bond 的公開欄位和公開文件；自己的認購、分配、付款狀態、持倉、付息與贖回紀錄、凍結等事件 |
+| 機構與個人投資人 | 公開認購中的 bond 的公開欄位和公開文件；自己的認購、分配、付款狀態、持倉、付息與贖回紀錄、凍結等事件（機構的所有員工帳號看到同一份） |
 | admin | 全部，依新增的 `AdminAction` 權限項 |
 
-- 新增 `Role.INVESTOR`。`@ReadAuth`、`@WriteAuth` 明確列出允許的角色；`CompanyGuard` 對 `INVESTOR` 一律拒絕。
-- 新增 `InvestorGuard`（只能讀寫自己的認購和持倉）、`OfferingGuard`（只看得到公開認購中的 bond）。
+- 新增 `Role.INVESTOR`。`@ReadAuth`、`@WriteAuth` 明確列出允許的角色；`CompanyGuard` 對 `INVESTOR` 一律拒絕，對 `CUSTOMER` 再檢查 `companyKind`：發行相關的操作只放行 `ISSUER` 公司。
+- 新增 `InvestorGuard`（依 JWT 的 `investorId`，只能讀寫自己的認購和持倉；個人投資人和機構投資人的員工都適用）、`OfferingGuard`（只看得到公開認購中的 bond）。
 - GraphQL 拆成公開版 `BondOfferingDto` 和發行方版 DTO，不要共用 `AssetDto`，避免審核紀錄、簽名、非公開文件外洩。
 - 投資人之間互相看不到。發行方能不能看到投資人明細，待定（第 10 節）。
 - 新增 `AdminAction`：`VIEW_INVESTORS`、`MANAGE_INVESTOR_KYC`、`VIEW_OFFERINGS`、`MANAGE_OFFERINGS`、`MANAGE_ALLOCATIONS`、`CONFIRM_PAYMENTS`、`SUBMIT_VAULT_REQUESTS`。
@@ -128,8 +135,8 @@ stateDiagram-v2
 | --- | --- | --- | --- | --- |
 | 審核中 | `REVIEWING` | 發行方提交 bond | — | 發行方 |
 | 已核准 | `APPROVED` | admin 審核通過、發行方確認 | — | 發行方 |
-| 建立合約 | `CONTRACT_SETUP` | 條款 PDF 定稿 | 上傳條款、`cmtat/deployments`、`GRANT_ROLE` × 6 | 發行方 |
-| 開放認購 | `OPEN_FOR_SUBSCRIPTION` | 角色都已在鏈上生效、到達認購開始日 | — | 發行方；所有已通過 KYC 的個人投資人 |
+| 建立合約 | `CONTRACT_SETUP` | 條款 PDF 定稿，代幣名稱、代號、decimals、`tokenId` 等部署欄位確定 | 上傳條款、`cmtat/deployments`、`GRANT_ROLE` × 6（第 7.2 節） | 發行方 |
+| 開放認購 | `OPEN_FOR_SUBSCRIPTION` | 角色都已在鏈上生效、到達認購開始日 | — | 發行方；所有已通過 KYC 的投資人（機構與個人，範圍依第 10 節） |
 | 截止簿記 | `BOOK_CLOSED` | 到達截止日或發行方手動截止 | — | 發行方；已認購的投資人 |
 | 已分配 | `ALLOCATED` | 分配表覆核通過，合計等於發行量 | `BATCH_SET_ALLOWLIST`（獲配投資人的託管錢包） | 發行方；獲配的投資人 |
 | 交割中 | `SETTLING` | 至少一位投資人付款已確認 | 依到帳分批 `BATCH_MINT` 到已付款投資人的託管錢包 | 發行方；獲配的投資人 |
@@ -140,6 +147,7 @@ stateDiagram-v2
 - 認購與分配只存在 DigiQuick；冷錢包看到的是 allowlist 和 mint。
 - 付款確認前，APP 上投資人看到的是「已分配、待付款」，鏈上還沒有代幣；付款確認後是「交付中」（`BATCH_MINT` 審核和上鏈中），`COMPLETED` 後才計入持倉。
 - 同一批 `BATCH_MINT` 只放已確認付款的投資人；付款陸續到帳時，累積到一定人數或時間就送一批，不要每到一筆就送一筆。
+- 認購、分配、mint 的數量都以代幣的最小單位計，API 的 `amount` 是字串。USDSN27 的 decimals 為 0，1 單位就是 `"1"`；分配時要檢查每位投資人的額度是整數單位，並且符合最低面額。
 - `Asset.status` 對 bond 改成由這個狀態機推導，而不是由 `AssetTransaction` 推導。
 - Aegis 後台的暫停、凍結、強制轉移、停用收到 webhook 後，記錄事件、更新登記冊並告警；這些事件不改變上面的主狀態。
 
@@ -158,7 +166,8 @@ stateDiagram-v2
 | 業務意圖 | 冷錢包 API | 觸發時機 |
 | --- | --- | --- |
 | 發行方開戶 | `POST /v1/client-requests` kind=ISSUER，再 `POST /v1/clients/{id}/wallets` × 4 | 發行方 KYC 通過 |
-| 個人投資人開戶 | kind=INVESTOR（個人欄位），再建託管錢包 | 投資人 KYC 通過 |
+| 機構投資人開戶 | kind=INVESTOR、`clientType: COMPANY`，再建託管錢包 | 機構投資人 KYC 通過 |
+| 個人投資人開戶 | kind=INVESTOR、`clientType: INDIVIDUAL`，再建託管錢包 | 個人投資人 KYC 通過 |
 | 建立債券合約 | 上傳條款 → `cmtat/deployments` → `GRANT_ROLE` × 6（依序）→ 查詢確認角色 | bond 核准後、開放認購前 |
 | 投資人准入或撤銷 | `BATCH_SET_ALLOWLIST` | 分配確定後；投資人資格失效時關閉 |
 | 交付 | `BATCH_MINT` 到已付款投資人的託管錢包 | 付款確認後 |
@@ -166,7 +175,37 @@ stateDiagram-v2
 | 修改條款或合約資訊 | `SET_TERMS`、`SET_INFORMATION` 等 | 條款變更核准 |
 | 贖回或註銷 | `BATCH_BURN` | 本金付款確認後 |
 
-### 7.2 基礎元件
+### 7.2 建立 CMTAT 合約（指南 §7.3 ⑦–⑩）
+
+1. `POST /v1/clients/{issuerId}/cmtat/terms-documents` 上傳條款 PDF（10 MB 以內），取得文件 ID。
+2. `POST /v1/clients/{issuerId}/cmtat/deployments`，由發行方 admin 錢包部署 CMTAT 3.0.0 Allowlist 版，body 共九個欄位：
+
+   | 欄位 | 來源 | USDSN27 |
+   | --- | --- | --- |
+   | `referenceId` | DigiQuick 產生 | `dq-usdsn27-deploy-001` |
+   | `walletId` | 發行方 admin 錢包（`VaultWallet`） | — |
+   | `name` | bond 的代幣名稱 | `DACCUSD3.50TokenisedStructuredNote2027` |
+   | `symbol` | bond 的代幣代號 | `USDSN27` |
+   | `decimals` | bond 的 decimals，0–18 的整數，部署後不能改 | `0` |
+   | `tokenId` | bond 的代幣識別碼 | `SN-03GB2712R-2027` |
+   | `termsName` | 條款名稱 | `USDSN27 Terms` |
+   | `termsDocumentId` | 第 1 步取得的文件 ID | — |
+   | `information` | 要公開上鏈的產品說明 | — |
+
+3. 部署請求 `COMPLETED` 後，從 `result.cmtatTokenId` 取得 ID，存進 `CmtatToken`。
+4. 由 admin 錢包簽署六筆 `GRANT_ROLE`（`POST …/cmtat/tokens/{cmtatTokenId}/calls`），每筆一個角色、一個獨立的 referenceId，`walletId` 填接受授權的錢包：
+
+   | 接受授權的發行方錢包 | 角色 |
+   | --- | --- |
+   | maker | `MINTER`、`BURNER`、`ALLOWLIST` |
+   | custodian（供 Aegis 操作） | `PAUSER`、`ENFORCER`、`ERC20ENFORCER` |
+
+   同一檔代幣一次只能處理一筆角色指派，撞到會回 `409 REQUEST_IN_PROGRESS`，所以六筆要依序送，前一筆有結果才送下一筆。
+5. `GET …/cmtat/tokens/{cmtatTokenId}` 確認六個角色都已在鏈上生效，bond 才能進入 `OPEN_FOR_SUBSCRIPTION`。
+
+之後的 `BATCH_SET_ALLOWLIST`、`BATCH_MINT`、`BATCH_BURN` 由 maker 錢包發起；暫停、凍結、強制轉移由 Aegis 透過 custodian 錢包在後台操作。
+
+### 7.3 基礎元件
 
 - **API client**：RSA-PSS（SHA-256、salt 32），簽章字串的 path 含 query string。重試時換 nonce 和 timestamp，不換 referenceId。429 依 `Retry-After` 等待，自己限流在每分鐘 120 次內。
 - **webhook endpoint**：放在 main app。用原始 body 驗 HMAC-SHA256；同一個 DB transaction 內用 `callbackId` 去重，只在 `seq` 較大時更新；10 秒內回應。
@@ -174,7 +213,7 @@ stateDiagram-v2
 - **排隊**：同一個錢包的代幣異動、同一檔代幣的角色指派，前一筆有結果才送下一筆（指南 §7.6）。
 - **即時推送**：狀態推進時用 APP 既有的 `graphql-ws` 推給相關的發行方和投資人。
 
-### 7.3 錯誤處理規則
+### 7.4 錯誤處理規則
 
 | 情況 | 處理 |
 | --- | --- |
@@ -190,21 +229,21 @@ stateDiagram-v2
 
 | 表 | 類型 | 內容 |
 | --- | --- | --- |
-| `Company` | 修改 | 加 `incorporationNo` |
-| `KycStep` enum | 修改 | `ASSIGNING_WALLET_ADDRESS` 換成 `VAULT_ONBOARDING` |
-| `Account`、`Role` | 修改 | 加 `investor` 關聯和 `INVESTOR` 角色 |
-| `Investor` | 新增 | 姓名、生日、國籍、證件類型與號碼（加密）、住址、手機、收款銀行帳戶、KYC 步驟、投資人資格與有效期限 |
-| `InvestorKycRecord` | 新增 | 個人投資人的 KYC 審核紀錄 |
+| `Company` | 修改 | 加 `kind`（`ISSUER`、`INVESTOR`）、`incorporationNo` |
+| `KycStep` enum | 修改 | `ASSIGNING_WALLET_ADDRESS` 換成 `VAULT_ONBOARDING`；加 `REVIEWING_INVESTOR_ELIGIBILITY`（機構投資人用） |
+| `Account`、`Role` | 修改 | 加 `investor` 關聯和 `INVESTOR` 角色（個人投資人） |
+| `Investor` | 新增 | `type`（`INDIVIDUAL`、`COMPANY`）；機構關聯 `companyId`；個人存姓名、生日、國籍、證件類型與號碼（加密）、住址、手機、收款銀行帳戶；KYC 步驟（個人）、投資人資格與有效期限 |
+| `InvestorKycRecord` | 新增 | 個人投資人的 KYC 審核紀錄（機構沿用 `KycRecord`） |
 | `AssetDb` | 修改 | 加 `issuanceChannel`（`TOKEN_FACTORY`、`VAULT_CMTAT`） |
-| `BondAssetDb` | 修改 | 加 `isin`、`decimals`、`termsDocumentId`、`recordDate`；`paymentDates`、`dayCount` 若要系統計息需結構化 |
+| `BondAssetDb` | 修改 | 加部署欄位 `tokenName`、`tokenSymbol`、`decimals`、`tokenId`、`termsName`、`termsDocumentId`、`onChainInformation`；加 `isin`、`recordDate`；`paymentDates`、`dayCount` 若要系統計息需結構化 |
 | `Offering` | 新增 | 認購期間、最低面額、發行量上限、交割日、狀態 |
-| `Subscription` | 新增 | 個人投資人、認購金額、狀態 |
-| `Allocation` | 新增 | 個人投資人、分配金額、覆核人 |
+| `Subscription` | 新增 | 投資人（`investorId`）、認購數量、狀態 |
+| `Allocation` | 新增 | 投資人（`investorId`）、分配數量、覆核人 |
 | `Settlement` | 新增 | 應付金額、付款期限、付款確認人與時間、對應的 `BATCH_MINT` 請求 |
 | `RegisterEntry`、`HoldingSnapshot` | 新增 | 鏈下登記冊異動、記錄日快照、對帳結果 |
-| `VaultClient` | 新增 | 發行方公司或個人投資人 → 冷錢包 `clientId`、`externalId` |
+| `VaultClient` | 新增 | 發行方公司或投資人 → 冷錢包 `clientId`、`externalId`、`kind`、`clientType` |
 | `VaultWallet` | 新增 | `walletId`、地址、用途（admin、maker、custodian、發行持有、託管） |
-| `CmtatToken` | 新增 | bond → `cmtatTokenId`、合約地址、角色狀態 |
+| `CmtatToken` | 新增 | bond → `cmtatTokenId`、合約地址、六個角色各自的授權錢包與狀態 |
 | `BusinessIntent` | 新增 | 意圖類型、業務對象、狀態 |
 | `VaultRequest` | 新增 | referenceId（唯一）、operationType、status、最後的 `seq`、結果與錯誤 |
 | `VaultCallback` | 新增 | `callbackId`（唯一），用來去重 |
@@ -217,25 +256,25 @@ stateDiagram-v2
 ### digiquick-api
 
 - 新模組 `core/vault/`（client、webhook controller、請求與意圖 service、對帳 cron），以及 `core/offering/`（認購、分配、交割）、`core/register/`（登記冊、快照）。依專案慣例分 `dto`、`models`、`repositories`、`services`、`resolvers`，並在 `tsconfig.json` 加 `@@vault/*` 等別名。
-- 新模組 `core/investor/`：個人投資人註冊、KYC、個人資料。`core/account` 加 `Role.INVESTOR`、投資人登入、loader 和 JWT payload。
-- 公司註冊與 KYC：`sign-up-service.ts` 加 `incorporationNo`；`kyc-service.ts`、`kyc-step.enum.ts` 依第 4 節修改。
-- 權限：修 `query.asset.ts` 的 `asset(id)`；新增 guard 與 `AdminAction`。
-- bond：`create-bond-asset.ts`、bond DTO 加新欄位；`asset.ts` 的 `get status()` 加 CMTAT 分支；`asset-query.repo.ts` 載入新關聯。
+- 新模組 `core/investor/`：個人投資人註冊、KYC、個人資料；機構投資人的 `Investor` 紀錄。`core/account` 加 `Role.INVESTOR`、投資人登入、loader 和 JWT payload（`companyKind`、`investorId`）。
+- 公司註冊與 KYC：`sign-up-service.ts` 加 `kind`、`incorporationNo`，`kind = INVESTOR` 時同時建立 `Investor`；`kyc-service.ts`、`kyc-step.enum.ts` 依第 4 節修改，第 2 步依 `kind` 分流。
+- 權限：修 `query.asset.ts` 的 `asset(id)`；新增 guard 與 `AdminAction`；`CompanyGuard` 檢查 `companyKind`。
+- bond：`create-bond-asset.ts`、bond DTO 加部署欄位與新欄位；`asset.ts` 的 `get status()` 加 CMTAT 分支；`asset-query.repo.ts` 載入新關聯。
 - email：新增投資人與發行方事件模板（KYC 通過、開放認購、分配結果、付款提醒、已交付、付息、贖回、凍結）。
 - 設定：env 加冷錢包 API key、私鑰（放 Secrets Manager）、webhook secret、base URL；`common/providers/network.ts` 加 Conflux eSpace 主網。
-- 測試：修好 `apps/main/test` 的 jest，為簽章、webhook、狀態機和錯誤規則寫單元測試；建立冷錢包 mock server。
+- 測試：修好 `apps/main/test` 的 jest，為簽章、webhook、狀態機和錯誤規則寫單元測試；建立冷錢包 mock server（含三種客戶申請、CMTAT 部署和 `GRANT_ROLE` 的 409 排隊行為）。
 
 ### digiquick-app
 
-- 註冊入口先選身份：發行方沿用現有公司表單，個人投資人用新表單（`pages/signUp`）；待審頁依身份顯示步驟；投資人登入。
-- 側邊欄依角色顯示。**發行方**：提交 bond（`components/Bond/BondAddBtn.tsx` 加 ISIN、decimals、條款 PDF）、發行進度、認購簿、分配、持有人。**投資人**：可認購債券、我的認購、我的持倉、付息與贖回紀錄。
+- 註冊入口先選身份：發行方、機構投資人用公司表單（加 `incorporationNo`），個人投資人用新表單（`pages/signUp`）；待審頁依身份顯示步驟；投資人登入。
+- 側邊欄依角色顯示。**發行方**：提交 bond（`components/Bond/BondAddBtn.tsx` 加 ISIN、代幣名稱、代號、decimals、`tokenId`、條款名稱、條款 PDF、上鏈產品說明）、發行進度、認購簿、分配、持有人。**投資人**（機構與個人）：可認購債券、我的認購、我的持倉、付息與贖回紀錄。
 - 新 hooks：`useOfferings`、`useCreateSubscription`、`useMyHoldings` 等；用 `graphql-ws` 訂閱狀態。
 - 跑 `yarn codegen` 更新 `utils/hooks/types.ts`、`possibleTypes.ts`。
 
 ### digiquick-admin
 
-- bond 詳情隱藏 `AssetMintBtn`、`AssetOwnershipBtn`、`AssetSetTimeBtn`，改成「CMTAT 發行」步驟面板（每筆請求的 referenceId、狀態、審核關卡、txHash）。
-- 新增：個人投資人列表與 KYC 審核頁（和現有的公司 `PendingKyc` 分開）、認購簿總覽、分配覆核、付款確認、例外佇列（被拒、失敗、逾時）、持有人快照與對帳。
+- bond 詳情隱藏 `AssetMintBtn`、`AssetOwnershipBtn`、`AssetSetTimeBtn`，改成「CMTAT 發行」步驟面板（條款上傳、部署、六筆角色指派，每筆請求的 referenceId、狀態、審核關卡、txHash）。
+- 新增：個人投資人列表與 KYC 審核頁（和現有的公司 `PendingKyc` 分開）；公司 KYC 頁依 `kind` 區分發行方與機構投資人，機構投資人第 2 步審投資人資格；認購簿總覽、分配覆核、付款確認、例外佇列（被拒、失敗、逾時）、持有人快照與對帳。
 - `AssetReviewBtn`、`AssetAcknowledgeBtn` 對 bond 不再要求 `signMessage`，改成雙人覆核。
 - 新權限項加進權限管理頁；跑 `yarn codegen`。
 
@@ -247,30 +286,38 @@ stateDiagram-v2
 
 **Aegis**
 
-- [ ] 個人 INVESTOR 申請時，除了指南 §7.2 的四個欄位，Aegis 審核還需要哪些資料或文件（例如證件影本、住址證明）？
-- [ ] CMTAT 3.0.0 的細節（目前指南沒有寫）：部署的 request body、`GRANT_ROLE` 是哪 6 個角色、decimals。
 - [ ] 審核 SLA，以及 dev、stg、主網的交付日期。交割期間付款會陸續到帳，`BATCH_MINT` 會分好幾批送出，需要知道每批從送出到 `COMPLETED` 大約要多久。這項不影響開發，影響的是交割日、付款期限的設定與上線排期。
+- [ ] 客戶審核時的文件收取方式：申請端點不收附件，Aegis 審核是否需要看 DigiQuick 收的證件、住址證明、公司文件，以及怎麼提供，Aegis 還沒有定義，請 DigiQuick 提案。建議方向：DigiQuick 自己完成 KYC 並保存文件，Aegis 需要時在後台向 DigiQuick 調閱，不經 API 傳送。
 
 **業務**
 
+- [ ] USDSN27 只對機構投資人發行。個人投資人分支（個人註冊、KYC、個人資料加密）要不要放在首發範圍，還是等之後有對個人發行的 bond 再做？
+- [ ] 個人投資人若開放，是否限專業投資者（香港個人專業投資者門檻：投資組合至少 800 萬港元）？還是開放一般個人？這決定 KYC 第 2 步和適合性評估的範圍。
+- [ ] 機構投資人的資格門檻：限機構專業投資者，還是也接受法團專業投資者（投資組合至少 800 萬港元或總資產至少 4,000 萬港元）？要收哪些證明？
+- [ ] 同一家公司能不能同時是發行方和機構投資人？冷錢包要申請兩個客戶（ISSUER 和 INVESTOR 各一）；DigiQuick 目前設計一家公司只選一種身份。
+- [ ] 發行方本身、其關聯公司、董事或員工能不能認購自己公司發行的 bond？
 - [ ] 發行方能不能看到每位投資人的身份和認購金額，還是只看彙總？
 - [ ] 分配由發行方在 APP 決定、admin 覆核；還是由安排行或 admin 決定？
-- [ ] 個人投資人是否限專業投資者（香港個人專業投資者門檻：投資組合至少 800 萬港元）？還是開放一般個人？這決定 KYC 第 2 步和適合性評估的範圍。
 - [ ] 付息與贖回金額由付款代理計算，還是由 DigiQuick 計算？
 - [ ] 持有人的正式紀錄以鏈下登記冊為準（本文件的預設），需要律師確認。
-- [ ] 發行方的董事、員工能不能以個人身份認購自己公司發行的 bond？
 - [ ] 投資人逾期未付款時，該投資人的分配額度怎麼處理：取消後重新分配給其他投資人、延長付款期限，還是直接縮減發行量？（款到才 mint，逾期額度沒有上鏈，只要處理 DigiQuick 內的分配和 allowlist。）
 - [ ] 交割方式（款到才 mint）和 Aegis 託管是否符合《證券及期貨（客戶證券）規則》，需要合規顧問確認，並寫進給投資人的披露文件。
+
+**已確認**（Aegis 依指南 v0.7 回覆）
+
+- [x] 有沒有機構投資人：有，USDSN27 的發行對象就是機構投資人。用 `kind: INVESTOR`、`clientType: COMPANY` 申請，每個客戶只有一個業務角色（第 2、4 節）。
+- [x] 個人 INVESTOR 申請要提供什麼：只要 `firstName`、`lastName`、`birthday`、`countryOfCitizenship`，不用上傳附件；省略 `clientType` 時預設 `INDIVIDUAL`。審核時的文件收取另議（見上方 Aegis 第 2 項）。
+- [x] CMTAT 3.0.0 的部署 body、六個角色、decimals：部署九個欄位；maker 授 `MINTER`、`BURNER`、`ALLOWLIST`，custodian 授 `PAUSER`、`ENFORCER`、`ERC20ENFORCER`；decimals 0–18 部署後固定，USDSN27 用 0（第 7.2 節）。
 
 ## 11. 建議的實施順序
 
 1. 修 `asset(id)` 權限漏洞，不用等其他決策。
-2. 向 Aegis 確認第 10 節的個人 INVESTOR 需要的資料、CMTAT 3.0.0 細節；決定個人投資人是否限專業投資者。
+2. 決定個人投資人分支是否放進首發、機構與個人投資人的資格門檻、同一家公司能否兼任發行方和投資人；向 Aegis 提出審核文件的收取方案。
 3. 冷錢包基礎元件：API client、`VaultRequest`、webhook、對帳 cron、mock server。
-4. 註冊入口加個人分支、`Role.INVESTOR`、投資人 KYC、`VAULT_ONBOARDING`（發行方與投資人開戶）。
-5. bond 新欄位、`issuanceChannel`、CMTAT 建立流程（條款、部署、角色）。
+4. 註冊入口加身份選擇、`Company.kind`、機構投資人 KYC、`VAULT_ONBOARDING`（發行方與機構投資人開戶）；若首發包含個人投資人，再加個人分支、`Role.INVESTOR` 和個人 KYC。
+5. bond 新欄位、`issuanceChannel`、CMTAT 建立流程（條款、部署、六個角色）。
 6. 認購、分配、allowlist、付款確認後 `BATCH_MINT`，以及 APP 的發行方與投資人畫面。
 7. 登記冊、持倉快照與三方對帳；Aegis 後台事件落地。
 8. 存續操作：`BURN_AND_MINT`、`SET_TERMS`、`SET_INFORMATION`；到期贖回 `BATCH_BURN`。
 
-第 3 到 6 步可以先在 mock server 上完成，Aegis dev 環境可用後再做端到端驗證。舊版工時估算（`bond-cmtat-aegis-estimate-report.md`）是在「投資人由券商開戶、不做投資人前台」的前提下做的，已不適用本文件的設計。個人投資人註冊、KYC 和 APP 投資人畫面需要重新估算。
+第 3 到 6 步可以先在 mock server 上完成，Aegis dev 環境可用後再做端到端驗證。舊版工時估算（`bond-cmtat-aegis-estimate-report.md`）是在「投資人由券商開戶、不做投資人前台」的前提下做的，已不適用本文件的設計。機構與個人投資人的註冊、KYC 和 APP 投資人畫面需要重新估算。
