@@ -227,7 +227,7 @@ stateDiagram-v2
 - 送 `BATCH_SET_ALLOWLIST`（`allowlistStatus: false`）把該投資人的託管錢包移出這檔代幣的 allowlist；同一天的逾期註銷合併成一批（每批最多 20 個）。
 - 留下註銷紀錄：投資人、原分配數量、應付金額、付款期限、註銷時間、執行的 admin、原因。紀錄不可刪除，發行方和該投資人在 APP 看得到。
 - 通知該投資人和發行方。
-- 只接受全額付款（本文件的預設）。部分付款不算付款確認，到期仍註銷整筆分配，已收的款項在鏈外退回。
+- 只接受全額付款。部分付款不算付款確認，到期仍註銷整筆分配，已收的款項在鏈外退回。
 
 
 ## 7. 冷錢包整合
@@ -386,6 +386,8 @@ stateDiagram-v2
 - [x] 分配由誰決定：發行方在 APP 決定、admin 覆核（第 6.1 節）。
 - [x] 發行方能不能看投資人明細：可以看到自己 bond 的每位投資人明細（第 5 節）。
 - [x] 逾期未付款：註銷該筆獲配額度並留下紀錄，不重新分配、不延期（第 6.2 節）。
+- [x] 註銷不自動執行：付款期限一到只列出逾期分配，由 admin 確認後才註銷（第 6.2 節）。
+- [x] 只接受全額付款：部分付款不算付款確認，到期仍註銷整筆分配，已收款項在鏈外退回（第 6.2 節）。
 - [x] 有沒有機構投資人：有，USDSN27 的發行對象就是機構投資人。用 `kind: INVESTOR`、`clientType: COMPANY` 申請，每個客戶只有一個業務角色（第 2、4 節）。
 - [x] 個人 INVESTOR 申請要提供什麼：只要 `firstName`、`lastName`、`birthday`、`countryOfCitizenship`，不用上傳附件；省略 `clientType` 時預設 `INDIVIDUAL`。審核時的文件收取另議（見上方 Aegis 第 2 項）。
 - [x] CMTAT 3.0.0 的部署 body、六個角色、decimals：部署九個欄位；maker 授 `MINTER`、`BURNER`、`ALLOWLIST`，custodian 授 `PAUSER`、`ENFORCER`、`ERC20ENFORCER`；decimals 0–18 部署後固定，USDSN27 用 0（第 7.2 節）。
