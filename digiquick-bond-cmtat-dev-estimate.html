@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DigiQuick bond 冷錢包 CMTAT：開發功能與工時估算</title>
+<style>
+  :root {
+    --bg: #fbfaf8; --surface: #ffffff; --ink: #1d1c1a; --muted: #66625c; --line: #e4e0d9;
+    --accent: #2f5d8a; --accent-soft: #e6eef6; --warn: #8a5a12; --warn-soft: #f8efdf; --code: #f2efea;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #161615; --surface: #1f1e1c; --ink: #ece9e4; --muted: #a39e96; --line: #34322e;
+      --accent: #8cb6dd; --accent-soft: #22303d; --warn: #e2b76c; --warn-soft: #3a2f1d; --code: #2a2926;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.65 -apple-system, "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", system-ui, sans-serif; }
+  main { max-width: 1080px; margin: 0 auto; padding: 48px 24px 80px; }
+  h1 { font-size: 28px; line-height: 1.3; margin: 0 0 8px; }
+  h2 { font-size: 20px; margin: 48px 0 12px; padding-top: 8px; border-top: 1px solid var(--line); }
+  h3 { font-size: 16px; margin: 24px 0 8px; }
+  p, li { max-width: 72ch; }
+  .meta { color: var(--muted); font-size: 14px; margin: 0 0 24px; }
+  code { font: 12.5px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: var(--code);
+    padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere; }
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; margin: 24px 0; }
+  .kpi { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; }
+  .kpi .v { font-size: 28px; font-weight: 650; font-variant-numeric: tabular-nums; }
+  .kpi .v small { font-size: 14px; font-weight: 500; color: var(--muted); margin-left: 4px; }
+  .kpi .l { color: var(--muted); font-size: 13px; }
+  .note { background: var(--accent-soft); border-radius: 8px; padding: 12px 16px; margin: 16px 0; }
+  .warn { background: var(--warn-soft); }
+  .table-wrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; }
+  th, td { text-align: left; vertical-align: top; padding: 8px 12px; border-bottom: 1px solid var(--line); }
+  thead th { font-size: 13px; color: var(--muted); font-weight: 600; background: var(--surface); position: sticky; top: 0; }
+  tbody tr:last-child td { border-bottom: 0; }
+  td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .tot { font-weight: 650; }
+  tr.mod th, tr.mod td { background: var(--accent-soft); font-weight: 600; }
+  tr.mod th { font-size: 14.5px; }
+  .mid { display: inline-block; min-width: 38px; color: var(--accent); font-weight: 700; font-variant-numeric: tabular-nums; }
+  .sec { color: var(--muted); font-weight: 400; font-size: 12.5px; margin-left: 10px; }
+  .mdesc { font-weight: 400; color: var(--muted); font-size: 13px; margin: 2px 0 0 38px; }
+  td.feat { white-space: nowrap; padding-left: 50px; }
+  td.desc { color: var(--muted); }
+  tfoot td { font-weight: 700; border-top: 2px solid var(--line); border-bottom: 0; }
+  .bar { height: 8px; background: var(--code); border-radius: 4px; min-width: 120px; }
+  .bar span { display: block; height: 100%; background: var(--accent); border-radius: 4px; }
+  ol.phases { padding-left: 20px; }
+  ol.phases li { margin: 6px 0; }
+  @media (max-width: 720px) { td.feat { white-space: normal; padding-left: 12px; } .mdesc { margin-left: 0; } }
+  @media print { body { background: #fff; } thead th { position: static; } }
+</style>
+</head>
+<body>
+<main>
+
+<h1>DigiQuick bond 改用冷錢包 CMTAT：開發功能與工時估算</h1>
+<p class="meta">日期：2026-11-25 ・ 依據：<code>digiquick-bond-cmtat-vault-changes.md</code>（2026-11-25 版）、冷錢包 Open API 串接指南 v0.7 ・ 單位：人天</p>
+
+<div class="kpis">
+  <div class="kpi"><div class="v">161<small>人天</small></div><div class="l">首發總工時（區間 137–201）</div></div>
+  <div class="kpi"><div class="v">約 12<small>週</small></div><div class="l">首發日曆時間，4 人團隊（保守 15 週）</div></div>
+  <div class="kpi"><div class="v">96<small>/ 31.5 / 33.5</small></div><div class="l">後端 / admin 前端 / APP 前端（人天）</div></div>
+  <div class="kpi"><div class="v">26<small>人天</small></div><div class="l">第二階段：個人投資人（另計）</div></div>
+</div>
+
+<p>首發範圍是<strong>發行方與機構投資人</strong>：註冊與 KYC、冷錢包開戶、bond 建立 CMTAT 合約、認購、分配、款到才 mint 的交割、逾期註銷、登記冊與對帳、存續操作、到期贖回。個人投資人放到第二階段，其他 8 種資產維持 TokenFactory，不在範圍內。</p>
+
+<h2>估算前提</h2>
+<ul>
+  <li><strong>人天</strong>指熟悉這幾個 repo（NestJS、TypeORM、Next.js 12、Apollo）的工程師一天的有效開發量，包含該功能的單元測試和自測。</li>
+  <li><strong>團隊配置</strong>：後端 2 人、admin 前端 1 人、APP 前端 1 人。後端是關鍵路徑：後端 96 人天 ÷ 2 人 ≈ 9.6 週；admin 6.3 週、APP 6.7 週，前端可以在後端 API 定型後並行。日曆時間再加 20% 的協調與相依等待。</li>
+  <li><strong>先用 mock server</strong>：M1 到 M10 在 mock server 上開發，不必等 Aegis dev 環境；M12 的端到端驗證需要 Aegis dev 環境。</li>
+  <li><strong>區間</strong>：下限是 −15%，上限是 +25%。上限反映冷錢包 API 仍是草稿、欄位可能調整，以及 Aegis 人工審核造成的等待。</li>
+  <li><strong>不含</strong>：UI 視覺設計、業務與法務確認、Aegis 側的開發與審核時間、正式環境的資安審查。</li>
+</ul>
+
+<h2>模組彙總</h2>
+<div class="table-wrap">
+<table>
+  <thead><tr><th>模組</th><th class="n">後端</th><th class="n">admin</th><th class="n">APP</th><th class="n">合計</th><th>佔比</th></tr></thead>
+  <tbody>
+<tr><td><span class="mid">M0</span>前置修正</td><td class="n">3</td><td class="n">—</td><td class="n">—</td><td class="n tot">3</td><td><div class="bar"><span style="width:13.6%"></span></div></td></tr>
+<tr><td><span class="mid">M1</span>冷錢包基礎元件</td><td class="n">20</td><td class="n">2</td><td class="n">—</td><td class="n tot">22</td><td><div class="bar"><span style="width:100.0%"></span></div></td></tr>
+<tr><td><span class="mid">M2</span>註冊與身份</td><td class="n">3.5</td><td class="n">—</td><td class="n">4</td><td class="n tot">7.5</td><td><div class="bar"><span style="width:34.1%"></span></div></td></tr>
+<tr><td><span class="mid">M3</span>公司 KYC 改寫與冷錢包開戶</td><td class="n">13</td><td class="n">4</td><td class="n">—</td><td class="n tot">17</td><td><div class="bar"><span style="width:77.3%"></span></div></td></tr>
+<tr><td><span class="mid">M4</span>bond 資料與審核流程改造</td><td class="n">7</td><td class="n">2.5</td><td class="n">2.5</td><td class="n tot">12</td><td><div class="bar"><span style="width:54.5%"></span></div></td></tr>
+<tr><td><span class="mid">M5</span>建立 CMTAT 合約</td><td class="n">5</td><td class="n">3</td><td class="n">—</td><td class="n tot">8</td><td><div class="bar"><span style="width:36.4%"></span></div></td></tr>
+<tr><td><span class="mid">M6</span>認購</td><td class="n">6</td><td class="n">2</td><td class="n">8</td><td class="n tot">16</td><td><div class="bar"><span style="width:72.7%"></span></div></td></tr>
+<tr><td><span class="mid">M7</span>分配</td><td class="n">5</td><td class="n">2.5</td><td class="n">5</td><td class="n tot">12.5</td><td><div class="bar"><span style="width:56.8%"></span></div></td></tr>
+<tr><td><span class="mid">M8</span>交割與逾期註銷</td><td class="n">6</td><td class="n">3.5</td><td class="n">3</td><td class="n tot">12.5</td><td><div class="bar"><span style="width:56.8%"></span></div></td></tr>
+<tr><td><span class="mid">M9</span>登記冊與對帳</td><td class="n">6</td><td class="n">3.5</td><td class="n">2</td><td class="n tot">11.5</td><td><div class="bar"><span style="width:52.3%"></span></div></td></tr>
+<tr><td><span class="mid">M10</span>存續與到期</td><td class="n">7</td><td class="n">3.5</td><td class="n">3.5</td><td class="n tot">14</td><td><div class="bar"><span style="width:63.6%"></span></div></td></tr>
+<tr><td><span class="mid">M11</span>通知與權限</td><td class="n">4.5</td><td class="n">1</td><td class="n">1.5</td><td class="n tot">7</td><td><div class="bar"><span style="width:31.8%"></span></div></td></tr>
+<tr><td><span class="mid">M12</span>整合測試與上線</td><td class="n">10</td><td class="n">4</td><td class="n">4</td><td class="n tot">18</td><td><div class="bar"><span style="width:81.8%"></span></div></td></tr>
+  </tbody>
+  <tfoot><tr><td>首發合計</td><td class="n">96</td><td class="n">31.5</td><td class="n">33.5</td><td class="n">161</td><td></td></tr></tfoot>
+</table>
+</div>
+
+<h2>建議排期</h2>
+<p>依改動說明第 11 節的順序，按 4 人團隊排：</p>
+<ol class="phases">
+  <li><strong>第 1–3 週</strong>：M0 前置修正、M1 冷錢包基礎元件與 mock server（後端）；前端同時做 M2 註冊頁與 M4 的 APP 提交 bond 表單。</li>
+  <li><strong>第 3–6 週</strong>：M2 註冊後端、M3 公司 KYC 改寫與開戶、M4 bond 資料與審核流程、M5 建立 CMTAT 合約；admin 做 KYC 頁與 CMTAT 發行面板。</li>
+  <li><strong>第 6–9 週</strong>：M6 認購、M7 分配、M8 交割與逾期註銷，這是首發的主線，前後端同步進行。</li>
+  <li><strong>第 9–10 週</strong>：M9 登記冊與對帳、M10 存續與到期、M11 通知與權限。</li>
+  <li><strong>第 10–12 週</strong>：M12 對 Aegis dev 環境端到端驗證、回歸測試、修正與上線。這段的長短取決於 Aegis dev 環境何時可用，以及審核 SLA；保守估計會延到第 15 週。</li>
+</ol>
+<div class="note">如果 USDSN27 要先上線，可以把 M10 的轉讓與條款變更延後，首發只到 <code>ISSUED</code> 加上到期贖回，約可省下 1–1.5 週。</div>
+
+<h2>功能明細</h2>
+<div class="table-wrap">
+<table>
+  <thead><tr><th>功能</th><th>內容</th><th class="n">後端</th><th class="n">admin</th><th class="n">APP</th><th class="n">合計</th></tr></thead>
+  <tbody>
+<tr class="mod"><th colspan="2" scope="rowgroup"><span class="mid">M0</span>前置修正<span class="sec">第 5、9 節</span><div class="mdesc">不用等其他決策，可以馬上開始。</div></th><td class="n">3</td><td class="n">—</td><td class="n">—</td><td class="n tot">3</td></tr>
+<tr><td class="feat">修 <code>asset(id)</code> 權限漏洞</td><td class="desc">單筆查詢檢查 <code>companyId</code>；投資人加入前必須先修</td><td class="n">1</td><td class="n">—</td><td class="n">—</td><td class="n">1</td></tr>
+<tr><td class="feat">修好 jest 測試環境</td><td class="desc"><code>apps/main/test</code> 可以跑，後續模組的單元測試都依賴它</td><td class="n">2</td><td class="n">—</td><td class="n">—</td><td class="n">2</td></tr>
+<tr class="mod"><th colspan="2" scope="rowgroup"><span class="mid">M1</span>冷錢包基礎元件<span class="sec">第 7.3、7.4 節</span><div class="mdesc">所有冷錢包操作的底座，先在 mock server 上完成。</div></th><td class="n">20</td><td class="n">2</td><td class="n">—</td><td class="n tot">22</td></tr>
+<tr><td class="feat">API client</td><td class="desc">RSA-PSS 簽章（path 含 query string）、nonce 與 timestamp、同一 referenceId 重試、<code>Retry-After</code>、每分鐘 120 次限流</td><td class="n">3</td><td class="n">—</td><td class="n">—</td><td class="n">3</td></tr>
+<tr><td class="feat">請求與意圖模型</td><td class="desc"><code>BusinessIntent</code>、<code>VaultRequest</code>、<code>VaultCallback</code> entity 與 migration；狀態推進與最終狀態判斷</td><td class="n">3</td><td class="n">—</td><td class="n">—</td><td class="n">3</td></tr>
+<tr><td class="feat">webhook endpoint</td><td class="desc">原始 body 驗 HMAC-SHA256、<code>callbackId</code> 去重、只在 <code>seq</code> 較大時更新、10 秒內回應</td><td class="n">2</td><td class="n">—</td><td class="n">—</td><td class="n">2</td></tr>
+<tr><td class="feat">對帳 cron</td><td class="desc">listener 輪詢未到最終狀態的請求、補查送達失敗的 webhook</td><td class="n">2</td><td class="n">—</td><td class="n">—</td><td class="n">2</td></tr>
+<tr><td class="feat">排隊</td><td class="desc">同一錢包的代幣異動、同一檔代幣的角色指派依序送出</td><td class="n">2</td><td class="n">—</td><td class="n">—</td><td class="n">2</td></tr>
+<tr><td class="feat">錯誤處理與例外佇列</td><td class="desc">依第 7.4 節的規則分流；被拒、失敗、逾時進例外佇列</td><td class="n">2</td><td class="n">2</td><td class="n">—</td><td class="n">4</td></tr>
+<tr><td class="feat">冷錢包 mock server</td><td class="desc">三種客戶申請、錢包、條款上傳、部署、合約操作、webhook 回呼、409 排隊行為</td><td class="n">5</td><td class="n">—</td><td class="n">—</td><td class="n">5</td></tr>
+<tr><td class="feat">設定</td><td class="desc">API key、私鑰放 Secrets Manager、webhook secret、base URL；Conflux eSpace 主網</td><td class="n">1</td><td class="n">—</td><td class="n">—</td><td class="n">1</td></tr>
+<tr class="mod"><th colspan="2" scope="rowgroup"><span class="mid">M2</span>註冊與身份<span class="sec">第 4.1 節</span><div class="mdesc">發行方和機構投資人共用公司註冊。</div></th><td class="n">3.5</td><td class="n">—</td><td class="n">4</td><td class="n tot">7.5</td></tr>
+<tr><td class="feat">註冊頁身份選擇</td><td class="desc">資產類別頁勾選 Bond 後選「發行」或「投資」；選投資只能選 Bond；公司表單加 <code>incorporationNo</code></td><td class="n">—</td><td class="n">—</td><td class="n">2</td><td class="n">2</td></tr>
+<tr><td class="feat">註冊後端</td><td class="desc"><code>SignUpArgs</code> 加 <code>kind</code>、<code>incorporationNo</code>；<code>Company.kind</code>；<code>kind = INVESTOR</code> 時建立 <code>Investor</code></td><td class="n">2</td><td class="n">—</td><td class="n">—</td><td class="n">2</td></tr>
+<tr><td class="feat">登入與身份權限</td><td class="desc">JWT 加 <code>companyKind</code>、<code>investorId</code>；<code>CompanyGuard</code> 檢查 <code>companyKind</code></td><td class="n">1.5</td><td class="n">—</td><td class="n">—</td><td class="n">1.5</td></tr>
+<tr><td class="feat">待審頁與登入導向</td><td class="desc">待審頁依身份顯示步驟；<code>KycLayout</code> 依身份導向 <code>/company</code> 或投資人首頁；側邊欄依身份顯示</td><td class="n">—</td><td class="n">—</td><td class="n">2</td><td class="n">2</td></tr>
+<tr class="mod"><th colspan="2" scope="rowgroup"><span class="mid">M3</span>公司 KYC 改寫與冷錢包開戶<span class="sec">第 4.2、4.3 節</span><div class="mdesc">KYC 完成不再只看 <code>walletAddress</code>。</div></th><td class="n">13</td><td class="n">4</td><td class="n">—</td><td class="n tot">17</td></tr>
+<tr><td class="feat">KYC 狀態推導改寫</td><td class="desc"><code>Company</code> 的 <code>kycStatus</code>、<code>currentKycStep</code> 依 <code>kind</code> 與核准的資產類別分流；<code>company.repo.ts</code> 的 SQL 篩選；<code>findCompanies</code> 加 <code>kind</code></td><td class="n">3</td><td class="n">—</td><td class="n">—</td><td class="n">3</td></tr>
+<tr><td class="feat">機構投資人資格審核</td><td class="desc">新增 <code>REVIEWING_INVESTOR_ELIGIBILITY</code> 步驟、審核 mutation 與紀錄</td><td class="n">2</td><td class="n">2</td><td class="n">—</td><td class="n">4</td></tr>
+<tr><td class="feat">冷錢包開戶</td><td class="desc">ISSUER 客戶 + 4 個錢包、機構 INVESTOR 客戶 + 託管錢包；webhook 更新 <code>vaultOnboardingStatus</code>；被拒後重新申請</td><td class="n">4</td><td class="n">—</td><td class="n">—</td><td class="n">4</td></tr>
+<tr><td class="feat">admin KYC 頁</td><td class="desc">依 <code>kind</code> 分成發行方與機構投資人列表；顯示開戶進度、觸發與重試</td><td class="n">—</td><td class="n">2</td><td class="n">—</td><td class="n">2</td></tr>
+<tr><td class="feat">發行權限檢查</td><td class="desc">建立資產、申請資產類別依 <code>kind</code> 和發行管道檢查</td><td class="n">1</td><td class="n">—</td><td class="n">—</td><td class="n">1</td></tr>
+<tr><td class="feat">既有資料 migration</td><td class="desc">既有公司設 <code>kind = ISSUER</code>；已核准 bond 的公司由 admin 逐家觸發開戶</td><td class="n">1</td><td class="n">—</td><td class="n">—</td><td class="n">1</td></tr>
+<tr><td class="feat">單元測試</td><td class="desc">KYC 推導各分支、開戶狀態推進</td><td class="n">2</td><td class="n">—</td><td class="n">—</td><td class="n">2</td></tr>
+<tr class="mod"><th colspan="2" scope="rowgroup"><span class="mid">M4</span>bond 資料與審核流程改造<span class="sec">第 3、6、6.1 節</span><div class="mdesc">保留審核與發行方確認，拿掉簽名與 TokenFactory 上鏈。</div></th><td class="n">7</td><td class="n">2.5</td><td class="n">2.5</td><td class="n tot">12</td></tr>
+<tr><td class="feat">資料欄位</td><td class="desc"><code>AssetDb.issuanceChannel</code>；<code>BondAssetDb</code> 部署欄位、ISIN、記錄日；migration</td><td class="n">1.5</td><td class="n">—</td><td class="n">—</td><td class="n">1.5</td></tr>
+<tr><td class="feat">bond 狀態機</td><td class="desc"><code>BondIssuanceStatus</code>、<code>BondIssuanceStatusLog</code>；<code>Asset.status</code> 對應成共用值</td><td class="n">2</td><td class="n">—</td><td class="n">—</td><td class="n">2</td></tr>
+<tr><td class="feat">建立 bond</td><td class="desc"><code>create-bond-asset.ts</code>、bond DTO；<code>VAULT_CMTAT</code> 不建立 <code>AssetSignature</code></td><td class="n">1.5</td><td class="n">—</td><td class="n">—</td><td class="n">1.5</td></tr>
+<tr><td class="feat">admin 雙人覆核</td><td class="desc">bond 審核改成兩位 admin 覆核，不再 <code>signMessage</code></td><td class="n">2</td><td class="n">1.5</td><td class="n">—</td><td class="n">3.5</td></tr>
+<tr><td class="feat">admin bond 詳情調整</td><td class="desc">隱藏 mint、ERC20、持有期間、代簽名按鈕與第三方簽名欄；bond 資產類別不能指派第三方</td><td class="n">—</td><td class="n">1</td><td class="n">—</td><td class="n">1</td></tr>
+<tr><td class="feat">APP 提交 bond</td><td class="desc"><code>BondAddBtn</code> 加 ISIN、代幣名稱、代號、decimals、<code>tokenId</code>、條款名稱、條款 PDF、上鏈產品說明</td><td class="n">—</td><td class="n">—</td><td class="n">2.5</td><td class="n">2.5</td></tr>
+<tr class="mod"><th colspan="2" scope="rowgroup"><span class="mid">M5</span>建立 CMTAT 合約<span class="sec">第 7.2 節</span><div class="mdesc">上傳條款 → 部署 → 六筆角色指派 → 確認。</div></th><td class="n">5</td><td class="n">3</td><td class="n">—</td><td class="n tot">8</td></tr>
+<tr><td class="feat">合約建立流程</td><td class="desc">條款 PDF 上傳、部署九個欄位、<code>GRANT_ROLE</code> × 6 依序送出、查詢確認角色、<code>CmtatToken</code></td><td class="n">4</td><td class="n">—</td><td class="n">—</td><td class="n">4</td></tr>
+<tr><td class="feat">admin「CMTAT 發行」面板</td><td class="desc">條款上傳、部署、角色指派各步驟的 referenceId、狀態、審核關卡、txHash</td><td class="n">—</td><td class="n">3</td><td class="n">—</td><td class="n">3</td></tr>
+<tr><td class="feat">單元測試</td><td class="desc">部署與角色指派的成功、409、被拒路徑</td><td class="n">1</td><td class="n">—</td><td class="n">—</td><td class="n">1</td></tr>
+<tr class="mod"><th colspan="2" scope="rowgroup"><span class="mid">M6</span>認購<span class="sec">第 5、6 節</span><div class="mdesc">投資人第一次接觸 bond 的地方。</div></th><td class="n">6</td><td class="n">2</td><td class="n">8</td><td class="n tot">16</td></tr>
+<tr><td class="feat">認購後端</td><td class="desc"><code>Offering</code> 開放與截止（含排程）、取消；<code>Subscription</code> 建立、修改、取消與檢查</td><td class="n">4</td><td class="n">—</td><td class="n">—</td><td class="n">4</td></tr>
+<tr><td class="feat">對外資料與權限</td><td class="desc">公開版 <code>BondOfferingDto</code> 與發行方版 DTO；<code>OfferingGuard</code>、<code>InvestorGuard</code></td><td class="n">2</td><td class="n">—</td><td class="n">—</td><td class="n">2</td></tr>
+<tr><td class="feat">APP 投資人</td><td class="desc">可認購債券列表與詳情、認購表單、我的認購</td><td class="n">—</td><td class="n">—</td><td class="n">5</td><td class="n">5</td></tr>
+<tr><td class="feat">APP 發行方</td><td class="desc">發行進度、認購簿與每位投資人明細</td><td class="n">—</td><td class="n">—</td><td class="n">3</td><td class="n">3</td></tr>
+<tr><td class="feat">admin 認購簿總覽</td><td class="desc">所有 bond 的認購情況</td><td class="n">—</td><td class="n">2</td><td class="n">—</td><td class="n">2</td></tr>
+<tr class="mod"><th colspan="2" scope="rowgroup"><span class="mid">M7</span>分配<span class="sec">第 6.2 節</span><div class="mdesc">發行方擬定、admin 覆核。</div></th><td class="n">5</td><td class="n">2.5</td><td class="n">5</td><td class="n tot">12.5</td></tr>
+<tr><td class="feat">分配後端</td><td class="desc">草稿、送出鎖定、覆核通過或退回、版本與紀錄；檢查認購上限、整數單位、最低面額、發行量上限、資格有效；通過後送 <code>BATCH_SET_ALLOWLIST</code></td><td class="n">5</td><td class="n">—</td><td class="n">—</td><td class="n">5</td></tr>
+<tr><td class="feat">APP 發行方分配頁</td><td class="desc">擬分配表、送覆核、看退回原因和歷史</td><td class="n">—</td><td class="n">—</td><td class="n">4</td><td class="n">4</td></tr>
+<tr><td class="feat">admin 分配覆核</td><td class="desc">通過或退回並填原因</td><td class="n">—</td><td class="n">2.5</td><td class="n">—</td><td class="n">2.5</td></tr>
+<tr><td class="feat">APP 投資人分配結果</td><td class="desc">獲配數量、應付金額、付款期限</td><td class="n">—</td><td class="n">—</td><td class="n">1</td><td class="n">1</td></tr>
+<tr class="mod"><th colspan="2" scope="rowgroup"><span class="mid">M8</span>交割與逾期註銷<span class="sec">第 6、6.3 節</span><div class="mdesc">款到才 mint；逾期註銷並留紀錄。</div></th><td class="n">6</td><td class="n">3.5</td><td class="n">3</td><td class="n tot">12.5</td></tr>
+<tr><td class="feat">交割後端</td><td class="desc"><code>Settlement</code>、admin 確認全額付款、累積成批送 <code>BATCH_MINT</code>、推進到 <code>ISSUED</code></td><td class="n">4</td><td class="n">—</td><td class="n">—</td><td class="n">4</td></tr>
+<tr><td class="feat">逾期註銷後端</td><td class="desc">逾期清單、admin 確認後註銷、<code>AllocationCancellation</code>、移出 allowlist（合併成批）</td><td class="n">2</td><td class="n">—</td><td class="n">—</td><td class="n">2</td></tr>
+<tr><td class="feat">admin 付款確認與逾期清單</td><td class="desc">確認到帳、逾期註銷操作</td><td class="n">—</td><td class="n">3.5</td><td class="n">—</td><td class="n">3.5</td></tr>
+<tr><td class="feat">APP 交割畫面</td><td class="desc">投資人看付款狀態與交付進度；發行方看交割進度與註銷紀錄</td><td class="n">—</td><td class="n">—</td><td class="n">3</td><td class="n">3</td></tr>
+<tr class="mod"><th colspan="2" scope="rowgroup"><span class="mid">M9</span>登記冊與對帳<span class="sec">第 1、7.3 節</span><div class="mdesc">鏈下登記冊是持有人的權威紀錄。</div></th><td class="n">6</td><td class="n">3.5</td><td class="n">2</td><td class="n tot">11.5</td></tr>
+<tr><td class="feat">登記冊後端</td><td class="desc"><code>RegisterEntry</code>、記錄日 <code>HoldingSnapshot</code>、持有人查詢與三方對帳</td><td class="n">4</td><td class="n">—</td><td class="n">—</td><td class="n">4</td></tr>
+<tr><td class="feat">Aegis 後台事件</td><td class="desc">暫停、凍結、強制轉移、停用的 webhook 落地、更新登記冊、告警</td><td class="n">2</td><td class="n">—</td><td class="n">—</td><td class="n">2</td></tr>
+<tr><td class="feat">admin 持有人與對帳頁</td><td class="desc">快照、對帳結果與差異</td><td class="n">—</td><td class="n">3.5</td><td class="n">—</td><td class="n">3.5</td></tr>
+<tr><td class="feat">APP 持有人與持倉</td><td class="desc">發行方的持有人頁；投資人的我的持倉</td><td class="n">—</td><td class="n">—</td><td class="n">2</td><td class="n">2</td></tr>
+<tr class="mod"><th colspan="2" scope="rowgroup"><span class="mid">M10</span>存續與到期<span class="sec">第 6、7.1 節</span><div class="mdesc">付息計算方式未定，先做紀錄與顯示。</div></th><td class="n">7</td><td class="n">3.5</td><td class="n">3.5</td><td class="n tot">14</td></tr>
+<tr><td class="feat">存續操作後端</td><td class="desc"><code>BURN_AND_MINT</code> 轉讓與換錢包、<code>SET_TERMS</code>、<code>SET_INFORMATION</code>，各自附核准流程</td><td class="n">4</td><td class="n">—</td><td class="n">—</td><td class="n">4</td></tr>
+<tr><td class="feat">到期與贖回後端</td><td class="desc">到期排程、本金付款確認後分批 <code>BATCH_BURN</code></td><td class="n">2</td><td class="n">—</td><td class="n">—</td><td class="n">2</td></tr>
+<tr><td class="feat">admin 存續操作頁</td><td class="desc">轉讓審核、條款變更、贖回</td><td class="n">—</td><td class="n">3.5</td><td class="n">—</td><td class="n">3.5</td></tr>
+<tr><td class="feat">APP 存續畫面</td><td class="desc">轉讓申請、付息與贖回紀錄</td><td class="n">—</td><td class="n">—</td><td class="n">2.5</td><td class="n">2.5</td></tr>
+<tr><td class="feat">付息紀錄</td><td class="desc">只記錄與顯示；由誰計算待定（第 10 節）</td><td class="n">1</td><td class="n">—</td><td class="n">1</td><td class="n">2</td></tr>
+<tr class="mod"><th colspan="2" scope="rowgroup"><span class="mid">M11</span>通知與權限<span class="sec">第 5、9 節</span></th><td class="n">4.5</td><td class="n">1</td><td class="n">1.5</td><td class="n tot">7</td></tr>
+<tr><td class="feat">email 模板</td><td class="desc">KYC 通過、開放認購、分配結果、分配退回、付款提醒、逾期註銷、已交付、付息、贖回、凍結</td><td class="n">3</td><td class="n">—</td><td class="n">—</td><td class="n">3</td></tr>
+<tr><td class="feat">即時推送</td><td class="desc">狀態推進時用 <code>graphql-ws</code> 推給發行方與投資人</td><td class="n">1</td><td class="n">—</td><td class="n">1.5</td><td class="n">2.5</td></tr>
+<tr><td class="feat">admin 權限項</td><td class="desc">7 個新 <code>AdminAction</code> 加進權限管理頁</td><td class="n">0.5</td><td class="n">1</td><td class="n">—</td><td class="n">1.5</td></tr>
+<tr class="mod"><th colspan="2" scope="rowgroup"><span class="mid">M12</span>整合測試與上線<span class="sec">第 11 節</span><div class="mdesc">Aegis dev 環境可用後才能做端到端驗證。</div></th><td class="n">10</td><td class="n">4</td><td class="n">4</td><td class="n tot">18</td></tr>
+<tr><td class="feat">對 Aegis dev 環境端到端驗證</td><td class="desc">從開戶到贖回走完一輪，修正和 mock 不一致的地方</td><td class="n">4</td><td class="n">1</td><td class="n">1</td><td class="n">6</td></tr>
+<tr><td class="feat">測試與修正緩衝</td><td class="desc">QA、回歸測試（含其他 8 種資產不受影響）、修 bug</td><td class="n">5</td><td class="n">2.5</td><td class="n">2.5</td><td class="n">10</td></tr>
+<tr><td class="feat">部署與文件</td><td class="desc">各環境設定、codegen、操作手冊</td><td class="n">1</td><td class="n">0.5</td><td class="n">0.5</td><td class="n">2</td></tr>
+  </tbody>
+  <tfoot><tr><td colspan="2">首發合計</td><td class="n">96</td><td class="n">31.5</td><td class="n">33.5</td><td class="n">161</td></tr></tfoot>
+</table>
+</div>
+
+<h2>第二階段：個人投資人</h2>
+<p>首發不做。資料模型已預留 <code>Investor.type</code>，加入個人分支不用改認購、分配和交割。以同樣的團隊約需 2 週。</p>
+<div class="table-wrap">
+<table>
+  <thead><tr><th>功能</th><th>內容</th><th class="n">後端</th><th class="n">admin</th><th class="n">APP</th><th class="n">合計</th></tr></thead>
+  <tbody>
+<tr class="mod"><th colspan="2" scope="rowgroup"><span class="mid">P2</span>第二階段：個人投資人<span class="sec">第 4 節</span><div class="mdesc">首發不做，先估算供排期參考。</div></th><td class="n">14.5</td><td class="n">6</td><td class="n">5.5</td><td class="n tot">26</td></tr>
+<tr><td class="feat">個人註冊與登入</td><td class="desc">個人表單、<code>Role.INVESTOR</code>、<code>signInInvestor</code>、<code>Account.investor</code></td><td class="n">3</td><td class="n">—</td><td class="n">3</td><td class="n">6</td></tr>
+<tr><td class="feat">權限改寫</td><td class="desc"><code>@ReadAuth</code>、<code>@WriteAuth</code> 明確列出角色；<code>CompanyGuard</code> 拒絕 <code>INVESTOR</code></td><td class="n">2</td><td class="n">—</td><td class="n">—</td><td class="n">2</td></tr>
+<tr><td class="feat">個人 KYC</td><td class="desc"><code>InvestorKycStep</code>、<code>InvestorKycRecord</code>、身份與資格審核</td><td class="n">3</td><td class="n">4</td><td class="n">1</td><td class="n">8</td></tr>
+<tr><td class="feat">個資保護</td><td class="desc">證件號碼、生日、住址、銀行帳戶加密儲存；admin 查看留稽核紀錄</td><td class="n">3</td><td class="n">1</td><td class="n">—</td><td class="n">4</td></tr>
+<tr><td class="feat">個人開戶</td><td class="desc"><code>clientType: INDIVIDUAL</code> 申請與託管錢包</td><td class="n">1</td><td class="n">—</td><td class="n">—</td><td class="n">1</td></tr>
+<tr><td class="feat">發行方看得到的個人欄位</td><td class="desc">只給姓名；私隱聲明</td><td class="n">0.5</td><td class="n">—</td><td class="n">0.5</td><td class="n">1</td></tr>
+<tr><td class="feat">測試與修正</td><td class="desc"></td><td class="n">2</td><td class="n">1</td><td class="n">1</td><td class="n">4</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h2>影響工時的風險與未定事項</h2>
+<div class="note warn">
+<ul>
+  <li><strong>冷錢包 API 仍是草稿</strong>（指南 v0.7）：欄位調整會影響 M1、M3、M5、M8。mock server 要跟著指南版本更新。</li>
+  <li><strong>Aegis dev 環境與審核 SLA 未定</strong>：M12 的長度、交割日和付款期限的設定都依賴它。</li>
+  <li><strong>付息與贖回金額由誰計算未定</strong>：目前 M10 只估「記錄與顯示」。如果由 DigiQuick 計算，要另加約 5–8 人天（結構化付息日、計息基礎、計算與覆核）。</li>
+  <li><strong>機構投資人資格門檻未定</strong>：影響 M3 審核頁要收的證明，審核頁先做成通用的，工時影響小。</li>
+  <li><strong>同一家公司能否兼任發行方與投資人</strong>：目前按「只選一種身份」估。如果要兼任，M2、M3 約加 3–4 人天。</li>
+  <li><strong>發行方關係人能否認購自己的 bond</strong>：只是 M7 多一項檢查，約 1 人天。</li>
+  <li><strong>既有程式沒有測試</strong>：M0 修 jest 只估基本可用；回歸測試其他 8 種資產的工作算在 M12 的緩衝裡。</li>
+</ul>
+</div>
+
+</main>
+</body>
+</html>
