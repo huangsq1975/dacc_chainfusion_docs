@@ -64,7 +64,7 @@ bond 新增 `issuanceChannel = VAULT_CMTAT` 後，下列程式對 bond 不再使
 
 | 項目 | 發行方（公司） | 機構投資人 | 個人投資人 |
 | --- | --- | --- | --- |
-| 註冊頁 | `pages/signUp` 先選身份，再填現有的公司表單 | 先選身份，再填同一份公司表單 | 先選身份，再填新的個人表單 |
+| 註冊頁 | `pages/signUp` 選資產類別；選了 Bond 時選「發行」，再填現有的公司表單 | 選資產類別頁選 Bond，再選「投資」，填同一份公司表單 | 第二階段另行設計入口，填新的個人表單 |
 | 建立的資料 | `Company`（`kind = ISSUER`）+ 第一位 `Customer` | `Company`（`kind = INVESTOR`）+ 第一位 `Customer` + `Investor`（`type = COMPANY`） | `Investor`（`type = INDIVIDUAL`，含個人資料） |
 | 帳號角色 | `CUSTOMER`（不變） | `CUSTOMER` | 新增 `INVESTOR` |
 | 新增欄位 | `incorporationNo`（冷錢包申請需要） | `incorporationNo`（冷錢包申請需要） | 姓、名、生日、國籍（冷錢包申請需要）；證件類型與號碼、住址、手機、收款銀行帳戶 |
@@ -73,7 +73,13 @@ bond 新增 `issuanceChannel = VAULT_CMTAT` 後，下列程式對 bond 不再使
 - 帳號沿用 `Account`：email、密碼、email 驗證、重設密碼都共用。`Account` 現在關聯 `admin`、`thirdParty`、`customer` 三種身份，新增第四種 `investor`（只給個人投資人）。
 - 登入：公司帳號沿用 `signInCustomer`，JWT payload 加 `companyKind`，機構投資人另帶 `investorId`；個人投資人新增 `signInInvestor`，或讓 `signInCustomer` 依帳號身份回傳，JWT payload 帶 `role = INVESTOR` 和 `investorId`。
 - 同一個 email 只能註冊一種身份（沿用現有的 `EmailAlreadyExistsError`）。
+- 公司註冊的身份選擇放在現有的資產類別頁（`pages/signUp/index.tsx`）：
+  - 勾選 Bond 時出現「發行」或「投資」的選項，必須選一個。
+  - 選「投資」：`kind = INVESTOR`，只能選 Bond，其他資產類別取消勾選並停用；後端不建立 `CompanyAssetType`，所以不經過資產類別審核。
+  - 選「發行」，或沒有勾選 Bond：`kind = ISSUER`，和現在一樣可以複選，勾選的資產類別照舊送審。
+  - `SignUpArgs` 加 `kind`；`kind = INVESTOR` 時後端只接受 `assetTypeIds = [BOND]`。
 - 待審頁 `pages/signUp/pending.tsx` 依身份顯示目前的 KYC 步驟。
+- 審核通過後，APP 登入依身份顯示不同頁面：`components/Layout/KycLayout.tsx` 在 `APPROVED` 時，發行方照舊導到 `/company`，機構投資人導到投資人首頁（可認購的債券）；側邊欄也依身份顯示（第 9 節）。
 
 ### 4.2 KYC 流程
 
@@ -81,7 +87,7 @@ bond 新增 `issuanceChannel = VAULT_CMTAT` 後，下列程式對 bond 不再使
 | --- | --- | --- | --- |
 | 1 | `REVIEWING_COMPANY`：公司 KYC、AML | `REVIEWING_COMPANY`：公司 KYC、AML | `REVIEWING_IDENTITY`：身份證件、住址證明、AML 篩查 |
 | 2 | `REVIEWING_ASSET_TYPES`：可發行的資產類別 | `REVIEWING_INVESTOR_ELIGIBILITY`：機構投資人資格（專業投資者類別） | `REVIEWING_INVESTOR_ELIGIBILITY`：投資人資格（是否限專業投資者待定，第 10 節） |
-| 3 | 依核准的資產類別（第 4.3 節）：有 TokenFactory 資產 → `ASSIGNING_WALLET_ADDRESS`（不變）；有 bond → `VAULT_ONBOARDING`：申請 ISSUER 客戶，建 admin、maker、custodian、發行持有 4 個錢包 | `VAULT_ONBOARDING`：申請 INVESTOR 客戶（`clientType: COMPANY`），建託管錢包 | `VAULT_ONBOARDING`：申請 INVESTOR 客戶（`clientType: INDIVIDUAL`），建託管錢包 |
+| 3 | 依核准的資產類別（第 4.3 節）：有 TokenFactory 資產 → `ASSIGNING_WALLET_ADDRESS`（不變）；有 bond → `VAULT_ONBOARDING`：申請 ISSUER 客戶，建 admin、maker、custodian、發行持有 4 個錢包（照指南 §7.1；款到才 mint 不會用到發行持有錢包，但仍照現有方式建立） | `VAULT_ONBOARDING`：申請 INVESTOR 客戶（`clientType: COMPANY`），建託管錢包 | `VAULT_ONBOARDING`：申請 INVESTOR 客戶（`clientType: INDIVIDUAL`），建託管錢包 |
 | 4 | `FINISHED`：可以提交核准的資產 | `FINISHED`：可以認購 | `FINISHED`：可以認購 |
 
 - 公司沿用 `core/company/models/kyc-step.enum.ts`：**保留** `ASSIGNING_WALLET_ADDRESS`，**新增** `VAULT_ONBOARDING` 和 `REVIEWING_INVESTOR_ELIGIBILITY`；第 2、3 步依 `Company.kind` 和核准的資產類別分流（第 4.3 節）。個人投資人另建 `InvestorKycStep` 和審核紀錄，不和公司的 `KycRecord` 混用。
@@ -91,7 +97,7 @@ bond 新增 `issuanceChannel = VAULT_CMTAT` 後，下列程式對 bond 不再使
   - 機構 INVESTOR：`clientType: COMPANY`（必須明傳），欄位同上；`externalId` 用 `investor-<investorId>`。
   - 個人 INVESTOR：`clientType: INDIVIDUAL`，`firstName`、`lastName`、`birthday`、`countryOfCitizenship` 取自 `Investor`；`externalId` 用 `investor-<investorId>`。
   - 只填該組合對應的欄位，混填會回 `400 VALIDATION_ERROR`。`externalId` 在三種申請之間不能重複，上面的前綴已保證這點。
-- 冷錢包申請端點只收建戶欄位，不收附件（Aegis 回覆第 2 題）。證件、住址證明、公司文件由 DigiQuick 在第 1、2 步自己收、自己審；Aegis 審核是否要看這些文件、怎麼提供，目前沒有定義，由 DigiQuick 提案（第 10 節）。
+- 盡職調查（DD）文件照現在的方式收：待審頁的「Upload Document」連到 Aegis 的 onboarding 網站（`https://onboarding.aegiscustody.com/`），發行方和機構投資人都在那裡上傳，DigiQuick 不收文件。冷錢包申請端點只收建戶欄位、不收附件（Aegis 回覆第 2 題），兩者不衝突。
 - 個資保護：證件號碼、生日、住址、銀行帳戶要加密儲存並限制存取（PDPO）；admin 查看時留稽核紀錄。
 
 ### 4.3 公司 KYC 狀態的推導（改寫 `Company` model）
@@ -347,7 +353,7 @@ stateDiagram-v2
 
 ### digiquick-app
 
-- 註冊入口先選身份：發行方、機構投資人用公司表單（加 `incorporationNo`）（`pages/signUp`）；待審頁依身份顯示步驟。第二階段再加個人投資人表單和登入。
+- 註冊：資產類別頁勾選 Bond 時選「發行」或「投資」（第 4.1 節），公司表單加 `incorporationNo`；待審頁依身份顯示步驟；`KycLayout.tsx` 依 `companyKind` 導向發行方或投資人首頁。第二階段再加個人投資人表單和登入。
 - 側邊欄依角色顯示。**發行方**：提交 bond（`components/Bond/BondAddBtn.tsx` 加 ISIN、代幣名稱、代號、decimals、`tokenId`、條款名稱、條款 PDF、上鏈產品說明）、發行進度、認購簿與每位投資人明細、分配頁（擬分配表、送覆核、看退回原因和歷史）、交割進度與逾期註銷紀錄、持有人。**投資人**（機構與個人）：可認購債券、我的認購、我的持倉、付息與贖回紀錄。
 - 新 hooks：`useOfferings`、`useCreateSubscription`、`useMyHoldings` 等；用 `graphql-ws` 訂閱狀態。
 - 跑 `yarn codegen` 更新 `utils/hooks/types.ts`、`possibleTypes.ts`。
@@ -368,7 +374,6 @@ stateDiagram-v2
 **Aegis**
 
 - [ ] 審核 SLA，以及 dev、stg、主網的交付日期。交割期間付款會陸續到帳，`BATCH_MINT` 會分好幾批送出，需要知道每批從送出到 `COMPLETED` 大約要多久。這項不影響開發，影響的是交割日、付款期限的設定與上線排期。
-- [ ] 客戶審核時的文件收取方式：申請端點不收附件，Aegis 審核是否需要看 DigiQuick 收的證件、住址證明、公司文件，以及怎麼提供，Aegis 還沒有定義，請 DigiQuick 提案。建議方向：DigiQuick 自己完成 KYC 並保存文件，Aegis 需要時在後台向 DigiQuick 調閱，不經 API 傳送。
 
 **業務**
 
@@ -387,15 +392,19 @@ stateDiagram-v2
 - [x] 發行方能不能看投資人明細：可以看到自己 bond 的每位投資人明細（第 5 節）。
 - [x] 逾期未付款：註銷該筆獲配額度並留下紀錄，不重新分配、不延期（第 6.2 節）。
 - [x] 註銷不自動執行：付款期限一到只列出逾期分配，由 admin 確認後才註銷（第 6.2 節）。
+- [x] 註冊時的身份選擇：資產類別頁選 Bond 後，再選「發行」或「投資」（第 4.1 節）。
+- [x] DD 文件：照現在的方式，在 Aegis onboarding 網站上傳（第 4.2 節）。
+- [x] 發行方錢包：照指南建 4 個，包括發行持有錢包（第 4.2 節）。
+- [x] 審核通過後的 APP 頁面：依身份顯示，發行方到 `/company`，機構投資人到投資人首頁（第 4.1 節）。
 - [x] 只接受全額付款：部分付款不算付款確認，到期仍註銷整筆分配，已收款項在鏈外退回（第 6.2 節）。
 - [x] 有沒有機構投資人：有，USDSN27 的發行對象就是機構投資人。用 `kind: INVESTOR`、`clientType: COMPANY` 申請，每個客戶只有一個業務角色（第 2、4 節）。
-- [x] 個人 INVESTOR 申請要提供什麼：只要 `firstName`、`lastName`、`birthday`、`countryOfCitizenship`，不用上傳附件；省略 `clientType` 時預設 `INDIVIDUAL`。審核時的文件收取另議（見上方 Aegis 第 2 項）。
+- [x] 個人 INVESTOR 申請要提供什麼：只要 `firstName`、`lastName`、`birthday`、`countryOfCitizenship`，不用上傳附件；省略 `clientType` 時預設 `INDIVIDUAL`。審核文件照現在的方式在 Aegis onboarding 網站上傳。
 - [x] CMTAT 3.0.0 的部署 body、六個角色、decimals：部署九個欄位；maker 授 `MINTER`、`BURNER`、`ALLOWLIST`，custodian 授 `PAUSER`、`ENFORCER`、`ERC20ENFORCER`；decimals 0–18 部署後固定，USDSN27 用 0（第 7.2 節）。
 
 ## 11. 建議的實施順序
 
 1. 修 `asset(id)` 權限漏洞，不用等其他決策。
-2. 決定機構投資人的資格門檻、同一家公司能否兼任發行方和投資人；向 Aegis 提出審核文件的收取方案。
+2. 決定機構投資人的資格門檻、同一家公司能否兼任發行方和投資人。
 3. 冷錢包基礎元件：API client、`VaultRequest`、webhook、對帳 cron、mock server。
 4. 註冊入口加身份選擇、`Company.kind`、公司 KYC 推導改寫與既有資料 migration（第 4.3 節）、機構投資人 KYC、`VAULT_ONBOARDING`（發行方與機構投資人開戶）。
 5. bond 新欄位、`issuanceChannel`、CMTAT 建立流程（條款、部署、六個角色）。
