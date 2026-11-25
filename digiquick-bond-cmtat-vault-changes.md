@@ -50,7 +50,7 @@ bond 新增 `issuanceChannel = VAULT_CMTAT` 後，下列程式對 bond 不再使
 | gas 價格、手續費 cron、ETH/USD 匯率 | `gas-price-provider.ts`、`cron-update-asset-transaction-fees.ts` | 不需要 |
 | `Asset.status` 依鏈上交易推導 | `core/asset/models/asset.ts` 的 `get status()` | 加 CMTAT 分支，依 bond 生命週期與冷錢包請求推導（第 6 節） |
 | admin、發行方、第三方用 `signMessage` 簽「資產內容證明」 | `AssetReviewBtn.tsx`、`AssetAcknowledgeBtn.tsx`、`core/asset/services/sign-asset-service.ts` | 改成 DigiQuick 內部雙人覆核；內容雜湊值用 `SET_INFORMATION` 寫上鏈 |
-| 公司登記 MetaMask 地址（KYC 步驟 `ASSIGNING_WALLET_ADDRESS`） | `core/company/services/assign-wallet-address.ts` | 改成等冷錢包建好託管錢包（第 4 節） |
+| 公司登記 MetaMask 地址（KYC 步驟 `ASSIGNING_WALLET_ADDRESS`），並以此判斷 KYC 完成 | `core/company/services/assign-wallet-address.ts`、`core/company/models/company.ts` | 保留給 TokenFactory 資產；bond 改看冷錢包開戶狀態，KYC 推導改寫（第 4.3 節） |
 
 ## 4. 註冊、身份與 KYC
 
@@ -81,10 +81,10 @@ bond 新增 `issuanceChannel = VAULT_CMTAT` 後，下列程式對 bond 不再使
 | --- | --- | --- | --- |
 | 1 | `REVIEWING_COMPANY`：公司 KYC、AML | `REVIEWING_COMPANY`：公司 KYC、AML | `REVIEWING_IDENTITY`：身份證件、住址證明、AML 篩查 |
 | 2 | `REVIEWING_ASSET_TYPES`：可發行的資產類別 | `REVIEWING_INVESTOR_ELIGIBILITY`：機構投資人資格（專業投資者類別） | `REVIEWING_INVESTOR_ELIGIBILITY`：投資人資格（是否限專業投資者待定，第 10 節） |
-| 3 | `VAULT_ONBOARDING`：申請 ISSUER 客戶，建 admin、maker、custodian、發行持有 4 個錢包 | `VAULT_ONBOARDING`：申請 INVESTOR 客戶（`clientType: COMPANY`），建託管錢包 | `VAULT_ONBOARDING`：申請 INVESTOR 客戶（`clientType: INDIVIDUAL`），建託管錢包 |
-| 4 | `FINISHED`：可以提交 bond | `FINISHED`：可以認購 | `FINISHED`：可以認購 |
+| 3 | 依核准的資產類別（第 4.3 節）：有 TokenFactory 資產 → `ASSIGNING_WALLET_ADDRESS`（不變）；有 bond → `VAULT_ONBOARDING`：申請 ISSUER 客戶，建 admin、maker、custodian、發行持有 4 個錢包 | `VAULT_ONBOARDING`：申請 INVESTOR 客戶（`clientType: COMPANY`），建託管錢包 | `VAULT_ONBOARDING`：申請 INVESTOR 客戶（`clientType: INDIVIDUAL`），建託管錢包 |
+| 4 | `FINISHED`：可以提交核准的資產 | `FINISHED`：可以認購 | `FINISHED`：可以認購 |
 
-- 公司沿用 `core/company/models/kyc-step.enum.ts`：`ASSIGNING_WALLET_ADDRESS` 換成 `VAULT_ONBOARDING`，並新增 `REVIEWING_INVESTOR_ELIGIBILITY`；第 2 步依 `Company.kind` 分流。個人投資人另建 `InvestorKycStep` 和審核紀錄，不和公司的 `KycRecord` 混用。
+- 公司沿用 `core/company/models/kyc-step.enum.ts`：**保留** `ASSIGNING_WALLET_ADDRESS`，**新增** `VAULT_ONBOARDING` 和 `REVIEWING_INVESTOR_ELIGIBILITY`；第 2、3 步依 `Company.kind` 和核准的資產類別分流（第 4.3 節）。個人投資人另建 `InvestorKycStep` 和審核紀錄，不和公司的 `KycRecord` 混用。
 - `VAULT_ONBOARDING` 由系統自動送出請求，等冷錢包 webhook 回傳 `COMPLETED` 才推進。被 `REJECTED` 時回到 admin 處理，不自動重送；重新申請時沿用原 `externalId`、換新的 `referenceId`（指南 §7.2）。
 - 冷錢包申請欄位（指南 §7.2）：
   - ISSUER：`clientType: COMPANY`，`companyName`、`incorporationNo`、`contactEmail` 取自 `Company`；`externalId` 用 `issuer-<companyId>`。
@@ -93,6 +93,59 @@ bond 新增 `issuanceChannel = VAULT_CMTAT` 後，下列程式對 bond 不再使
   - 只填該組合對應的欄位，混填會回 `400 VALIDATION_ERROR`。`externalId` 在三種申請之間不能重複，上面的前綴已保證這點。
 - 冷錢包申請端點只收建戶欄位，不收附件（Aegis 回覆第 2 題）。證件、住址證明、公司文件由 DigiQuick 在第 1、2 步自己收、自己審；Aegis 審核是否要看這些文件、怎麼提供，目前沒有定義，由 DigiQuick 提案（第 10 節）。
 - 個資保護：證件號碼、生日、住址、銀行帳戶要加密儲存並限制存取（PDPO）；admin 查看時留稽核紀錄。
+
+### 4.3 公司 KYC 狀態的推導（改寫 `Company` model）
+
+現在公司的 KYC 狀態沒有存在資料庫，而是由 `walletAddress` 推導：`core/company/models/company.ts:47-67` 的 `kycStatus` 和 `currentKycStep` 都是「有 `walletAddress` 就是 `APPROVED`／`FINISHED`」。這個判斷還用在：
+
+| 位置 | 用途 |
+| --- | --- |
+| `core/company/repositories/company.repo.ts:129-160` | admin 公司列表的 `kycStatus`、`awaitingKyc` 篩選，用 `company.walletAddress IS NULL / IS NOT NULL` 寫成 SQL |
+| `core/asset/resolvers/base.create-asset-resolver.ts:16` | 建立資產前要求 `kycStatus === APPROVED` |
+| `core/company/resolvers/mutation.request-new-asset-types.ts:48` | 申請新資產類別前要求 `kycStatus === APPROVED` |
+
+同時，其他 8 種 TokenFactory 資產仍要用 `company.walletAddress`：`core/asset/services/create-asset-base.ts:47` 寫入簽名內容的 `Client Address`，`:106` 建立公司簽名紀錄（公司之後用這個地址 `signMessage`），`prepare-asset-deployment-service.ts:106` 寫進鏈上 metadata。
+
+所以不能把 `ASSIGNING_WALLET_ADDRESS` 換掉，也不能沿用「有 `walletAddress` 才算完成」：只發 bond 的發行方和機構投資人都沒有 `walletAddress`，會永遠停在 `PENDING`，不能提交 bond，也進不了認購。改法如下。
+
+**開戶狀態另外存**
+
+- `Company` 加 `vaultOnboardingStatus`（`NOT_STARTED`、`IN_PROGRESS`、`COMPLETED`、`REJECTED`）。`VaultClient` 和託管錢包的 webhook 在同一個 DB transaction 內更新它；ISSUER 要 4 個錢包都核准，機構 INVESTOR 要託管錢包核准，才算 `COMPLETED`。
+- 存成欄位而不是即時查 `VaultClient`，是為了 `company.repo.ts` 的 SQL 篩選能直接用。
+
+**`currentKycStep` 依 `kind` 分流**
+
+| 順序 | 發行方（`kind = ISSUER`） | 機構投資人（`kind = INVESTOR`） |
+| --- | --- | --- |
+| 1 | 沒有通過的 `KycRecord` → `REVIEWING_COMPANY` | 同左 |
+| 2 | 有未審的資產類別 → `REVIEWING_ASSET_TYPES` | 投資人資格未通過 → `REVIEWING_INVESTOR_ELIGIBILITY` |
+| 3 | 核准了任何 TokenFactory 資產類別且 `walletAddress` 為 null → `ASSIGNING_WALLET_ADDRESS` | — |
+| 4 | 核准了 `AssetTypeId.BOND` 且 `vaultOnboardingStatus ≠ COMPLETED` → `VAULT_ONBOARDING` | `vaultOnboardingStatus ≠ COMPLETED` → `VAULT_ONBOARDING` |
+| 5 | 以上都滿足 → `FINISHED` | 以上都滿足 → `FINISHED` |
+
+- 同時核准 bond 和其他資產的發行方，第 3、4 步都要走；兩步互不依賴，`currentKycStep` 先顯示第 3 步。
+- 機構投資人沒有資產類別。現在的 `_assetTypePending` 對空陣列會直接判定通過，改寫後機構投資人不經過這個判斷。
+
+**`kycStatus` 和發行權限分開**
+
+- `kycStatus = APPROVED` 的條件改成「公司 KYC 通過，而且至少一條管道可用」：發行方是 `walletAddress` 有值或 `vaultOnboardingStatus = COMPLETED`；機構投資人是 `vaultOnboardingStatus = COMPLETED`。`PENDED` 的判斷（有被拒的 `KycRecord`）不變。這樣既有已核准的公司狀態不變；之後才加 bond 的公司在開戶期間仍是 `APPROVED`，可以繼續發其他資產，只是 `currentKycStep` 顯示 `VAULT_ONBOARDING`。
+- 能不能發某種資產另外檢查，不再只看 `kycStatus`：
+  - `base.create-asset-resolver.ts`：要求 `kind = ISSUER`、該資產類別已核准；bond 另要求 `vaultOnboardingStatus = COMPLETED`，其他資產另要求 `walletAddress` 有值。
+  - `mutation.request-new-asset-types.ts`：要求 `kind = ISSUER`，機構投資人不能申請資產類別。
+  - 這兩處是 resolver 自己檢查，不經過第 5 節的 `CompanyGuard`，要個別修改。
+- 冷錢包開戶的觸發點：發行方的 bond 資產類別（`AssetTypeId.BOND`）核准時（新公司在 KYC 第 2 步，既有公司在申請新資產類別被核准時）；機構投資人在投資人資格審核通過時。
+
+**admin 列表**
+
+- `findCompanies`（`query.company.ts`、`company.repo.ts`）加 `kind` 參數；`kycStatus`、`awaitingKyc` 的 SQL 改成依上面的規則組合 `walletAddress`、`vaultOnboardingStatus` 和 `kind`。
+- admin 的公司 KYC 頁依 `kind` 分成發行方和機構投資人兩個列表。
+
+**既有資料 migration**
+
+- 既有公司全部設 `kind = ISSUER`、`vaultOnboardingStatus = NOT_STARTED`；`walletAddress` 不動，狀態和現在一樣。
+- 停在 `ASSIGNING_WALLET_ADDRESS` 的公司照舊等 admin 登記地址。
+- 既有已核准 bond 資產類別的公司，`currentKycStep` 會變成 `VAULT_ONBOARDING`。migration 不自動送開戶請求，由 admin 在後台逐家觸發，避免一次送出大量申請。
+- 既有的 bond 資產設 `issuanceChannel = TOKEN_FACTORY`，維持原本的鏈上流程；新建的 bond 才是 `VAULT_CMTAT`。
 
 ## 5. 權限與資料可見範圍
 
@@ -104,7 +157,7 @@ bond 新增 `issuanceChannel = VAULT_CMTAT` 後，下列程式對 bond 不再使
 | 機構與個人投資人 | 公開認購中的 bond 的公開欄位和公開文件；自己的認購、分配、付款狀態、持倉、付息與贖回紀錄、凍結等事件（機構的所有員工帳號看到同一份） |
 | admin | 全部，依新增的 `AdminAction` 權限項 |
 
-- `CompanyGuard` 對 `CUSTOMER` 再檢查 `companyKind`：發行相關的操作只放行 `ISSUER` 公司。第二階段新增 `Role.INVESTOR` 時，`@ReadAuth`、`@WriteAuth` 明確列出允許的角色，`CompanyGuard` 對 `INVESTOR` 一律拒絕。
+- `CompanyGuard` 對 `CUSTOMER` 再檢查 `companyKind`：發行相關的操作只放行 `ISSUER` 公司。建立資產、申請資產類別這兩個 resolver 自己檢查 `kycStatus`，不經過 guard，依第 4.3 節個別修改。第二階段新增 `Role.INVESTOR` 時，`@ReadAuth`、`@WriteAuth` 明確列出允許的角色，`CompanyGuard` 對 `INVESTOR` 一律拒絕。
 - 新增 `InvestorGuard`（依 JWT 的 `investorId`，只能讀寫自己的認購和持倉；個人投資人和機構投資人的員工都適用）、`OfferingGuard`（只看得到公開認購中的 bond）。
 - GraphQL 拆成公開版 `BondOfferingDto` 和發行方版 DTO，不要共用 `AssetDto`，避免審核紀錄、簽名、非公開文件外洩。
 - 投資人之間互相看不到。發行方能不能看到投資人明細，待定（第 10 節）。
@@ -232,8 +285,8 @@ stateDiagram-v2
 
 | 表 | 類型 | 內容 |
 | --- | --- | --- |
-| `Company` | 修改 | 加 `kind`（`ISSUER`、`INVESTOR`）、`incorporationNo` |
-| `KycStep` enum | 修改 | `ASSIGNING_WALLET_ADDRESS` 換成 `VAULT_ONBOARDING`；加 `REVIEWING_INVESTOR_ELIGIBILITY`（機構投資人用） |
+| `Company` | 修改 | 加 `kind`（`ISSUER`、`INVESTOR`）、`incorporationNo`、`vaultOnboardingStatus`；`walletAddress` 保留給 TokenFactory 資產（第 4.3 節） |
+| `KycStep` enum | 修改 | 保留 `ASSIGNING_WALLET_ADDRESS`；加 `VAULT_ONBOARDING`、`REVIEWING_INVESTOR_ELIGIBILITY`（機構投資人用） |
 | `Account`、`Role` | 修改（第二階段） | 加 `investor` 關聯和 `INVESTOR` 角色（個人投資人） |
 | `Investor` | 新增 | `type`（`INDIVIDUAL`、`COMPANY`，首發只用 `COMPANY`）；機構關聯 `companyId`；投資人資格與有效期限。第二階段再加個人欄位：姓名、生日、國籍、證件類型與號碼（加密）、住址、手機、收款銀行帳戶、個人 KYC 步驟 |
 | `InvestorKycRecord` | 新增（第二階段） | 個人投資人的 KYC 審核紀錄（機構沿用 `KycRecord`） |
@@ -260,7 +313,7 @@ stateDiagram-v2
 
 - 新模組 `core/vault/`（client、webhook controller、請求與意圖 service、對帳 cron），以及 `core/offering/`（認購、分配、交割）、`core/register/`（登記冊、快照）。依專案慣例分 `dto`、`models`、`repositories`、`services`、`resolvers`，並在 `tsconfig.json` 加 `@@vault/*` 等別名。
 - 新模組 `core/investor/`：機構投資人的 `Investor` 紀錄與資格；`core/account` 的 JWT payload 加 `companyKind`、`investorId`。第二階段再加個人投資人註冊、KYC、個人資料，以及 `Role.INVESTOR`、個人投資人登入和 loader。
-- 公司註冊與 KYC：`sign-up-service.ts` 加 `kind`、`incorporationNo`，`kind = INVESTOR` 時同時建立 `Investor`；`kyc-service.ts`、`kyc-step.enum.ts` 依第 4 節修改，第 2 步依 `kind` 分流。
+- 公司註冊與 KYC：`sign-up-service.ts` 加 `kind`、`incorporationNo`，`kind = INVESTOR` 時同時建立 `Investor`；`kyc-service.ts`、`kyc-step.enum.ts` 依第 4 節修改，第 2 步依 `kind` 分流；`models/company.ts` 的 `kycStatus`、`currentKycStep` 和 `company.repo.ts`、`query.company.ts` 的列表篩選依第 4.3 節改寫；`base.create-asset-resolver.ts`、`mutation.request-new-asset-types.ts` 改成依 `kind` 和發行管道檢查；既有資料 migration 依第 4.3 節。
 - 權限：修 `query.asset.ts` 的 `asset(id)`；新增 guard 與 `AdminAction`；`CompanyGuard` 檢查 `companyKind`。
 - bond：`create-bond-asset.ts`、bond DTO 加部署欄位與新欄位；`asset.ts` 的 `get status()` 加 CMTAT 分支；`asset-query.repo.ts` 載入新關聯。
 - email：新增投資人與發行方事件模板（KYC 通過、開放認購、分配結果、付款提醒、已交付、付息、贖回、凍結）。
@@ -317,7 +370,7 @@ stateDiagram-v2
 1. 修 `asset(id)` 權限漏洞，不用等其他決策。
 2. 決定機構投資人的資格門檻、同一家公司能否兼任發行方和投資人；向 Aegis 提出審核文件的收取方案。
 3. 冷錢包基礎元件：API client、`VaultRequest`、webhook、對帳 cron、mock server。
-4. 註冊入口加身份選擇、`Company.kind`、機構投資人 KYC、`VAULT_ONBOARDING`（發行方與機構投資人開戶）。
+4. 註冊入口加身份選擇、`Company.kind`、公司 KYC 推導改寫與既有資料 migration（第 4.3 節）、機構投資人 KYC、`VAULT_ONBOARDING`（發行方與機構投資人開戶）。
 5. bond 新欄位、`issuanceChannel`、CMTAT 建立流程（條款、部署、六個角色）。
 6. 認購、分配、allowlist、付款確認後 `BATCH_MINT`，以及 APP 的發行方與投資人畫面。
 7. 登記冊、持倉快照與三方對帳；Aegis 後台事件落地。
