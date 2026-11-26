@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DigiQuick bond 冷錢包 CMTAT：全程 AI 開發的做法與工時評估</title>
+<style>
+  :root {
+    --bg: #fbfaf8; --surface: #ffffff; --ink: #1d1c1a; --muted: #66625c; --line: #e4e0d9;
+    --accent: #2f5d8a; --accent-soft: #e6eef6; --warn: #8a5a12; --warn-soft: #f8efdf; --code: #f2efea;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #161615; --surface: #1f1e1c; --ink: #ece9e4; --muted: #a39e96; --line: #34322e;
+      --accent: #8cb6dd; --accent-soft: #22303d; --warn: #e2b76c; --warn-soft: #3a2f1d; --code: #2a2926;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.65 -apple-system, "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", system-ui, sans-serif; }
+  main { max-width: 1080px; margin: 0 auto; padding: 48px 24px 80px; }
+  h1 { font-size: 28px; line-height: 1.3; margin: 0 0 8px; }
+  h2 { font-size: 20px; margin: 48px 0 12px; padding-top: 8px; border-top: 1px solid var(--line); }
+  h3 { font-size: 16px; margin: 24px 0 8px; }
+  p, li { max-width: 72ch; }
+  .meta { color: var(--muted); font-size: 14px; margin: 0 0 24px; }
+  code { font: 12.5px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: var(--code);
+    padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere; }
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; margin: 24px 0; }
+  .kpi { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; }
+  .kpi .v { font-size: 28px; font-weight: 650; font-variant-numeric: tabular-nums; }
+  .kpi .v small { font-size: 14px; font-weight: 500; color: var(--muted); margin-left: 4px; }
+  .kpi .l { color: var(--muted); font-size: 13px; }
+  .note { background: var(--accent-soft); border-radius: 8px; padding: 12px 16px; margin: 16px 0; }
+  .warn { background: var(--warn-soft); }
+  .table-wrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; }
+  th, td { text-align: left; vertical-align: top; padding: 8px 12px; border-bottom: 1px solid var(--line); }
+  thead th { font-size: 13px; color: var(--muted); font-weight: 600; background: var(--surface); position: sticky; top: 0; }
+  tbody tr:last-child td { border-bottom: 0; }
+  td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .tot { font-weight: 650; }
+  tr.mod th, tr.mod td { background: var(--accent-soft); font-weight: 600; }
+  tr.mod th { font-size: 14.5px; }
+  .mid { display: inline-block; min-width: 38px; color: var(--accent); font-weight: 700; font-variant-numeric: tabular-nums; }
+  .sec { color: var(--muted); font-weight: 400; font-size: 12.5px; margin-left: 10px; }
+  .mdesc { font-weight: 400; color: var(--muted); font-size: 13px; margin: 2px 0 0 38px; }
+  td.feat { white-space: nowrap; padding-left: 50px; }
+  td.desc { color: var(--muted); }
+  tfoot td { font-weight: 700; border-top: 2px solid var(--line); border-bottom: 0; }
+  .bar { height: 8px; background: var(--code); border-radius: 4px; min-width: 120px; }
+  .bar span { display: block; height: 100%; background: var(--accent); border-radius: 4px; }
+  ol.phases { padding-left: 20px; }
+  ol.phases li { margin: 6px 0; }
+  @media (max-width: 720px) { td.feat { white-space: normal; padding-left: 12px; } .mdesc { margin-left: 0; } }
+  @media print { body { background: #fff; } thead th { position: static; } }
+</style>
+</head>
+<body>
+<main>
+
+<h1>DigiQuick bond 冷錢包 CMTAT：全程 AI 開發的做法與工時評估</h1>
+<p class="meta">日期：2026-11-26 ・ 依據：<code>digiquick-bond-cmtat-dev-estimate.html</code>（2026-11-25 版，傳統開發 161 人天）、<code>digiquick-bond-cmtat-vault-changes.md</code> ・ 單位：人天（人力工時，不含 AI 本身的運算時間）</p>
+
+<div class="kpis">
+  <div class="kpi"><div class="v">約 70<small>人天</small></div><div class="l">AI 模式人力工時（區間 55–90），原估 161</div></div>
+  <div class="kpi"><div class="v">約 560<small>小時</small></div><div class="l">以每人天 8 小時換算</div></div>
+  <div class="kpi"><div class="v">6–8<small>週</small></div><div class="l">上線日曆時間，2–3 人帶多個 AI agent（原估 12–15 週）</div></div>
+  <div class="kpi"><div class="v">2.3<small>×</small></div><div class="l">整體加速倍數；各模組 1.5×–3.5× 不等</div></div>
+</div>
+
+<p>範圍和原估算相同：bond 首發，對象是<strong>發行方與機構投資人</strong>，M0–M12；個人投資人（第二階段）與其他 8 種資產不在範圍內。「全程 AI 開發」指程式碼、測試、mock server、頁面由 AI agent（如 Claude Code）產出，人負責拆任務、定規則、審查、驗收與對外協調。</p>
+<div class="note">AI 不會讓所有工作一樣快。程式碼產生不再是瓶頸，瓶頸變成<strong>人審查的速度</strong>、<strong>未定的業務規則</strong>，以及 <strong>Aegis 的環境與審核</strong>。</div>
+
+<h2>現況：影響 AI 開發速度的兩件事</h2>
+<ul>
+  <li><strong>沒有任何測試</strong>：<code>digiquick-api/apps/main/test</code> 目前沒有 <code>*.spec.ts</code>。AI 改完程式無法自己驗證，也無法確認其他 8 種資產沒被改壞，所以 M0 修 jest 一定要最先做。</li>
+  <li><strong>codegen 指向遠端</strong>：admin 和 APP 的 <code>codegen.yml</code> 讀的是已部署的 dev API schema。後端新寫的 schema 還沒部署前，前端拿不到型別，前後端無法並行；要改成可讀本機 schema 或 schema 檔。</li>
+</ul>
+<p>程式規模（不含 node_modules、codegen 產物、migration）：api 約 2.9 萬行、admin 約 1.4 萬行、APP 約 1.9 萬行，AI 讀得完整體結構，既有 pattern（每種資產一組 entity / DTO / resolver / Table / DetailBtn）也很一致，適合 AI 照著擴充。</p>
+
+<h2>各模組估算</h2>
+<div class="table-wrap">
+<table>
+  <thead><tr><th>模組</th><th class="n">原估</th><th class="n">AI 模式</th><th class="n">倍數</th><th>佔原估</th><th>說明</th></tr></thead>
+  <tbody>
+<tr><td><span class="mid">M0</span>前置修正</td><td class="n">3</td><td class="n tot">1.5</td><td class="n">2×</td><td><div class="bar"><span style="width:50%"></span></div></td><td class="desc">修 jest 是 AI 能自我驗證的前提；<code>asset(id)</code> 權限修正要人審</td></tr>
+<tr><td><span class="mid">M1</span>冷錢包基礎元件</td><td class="n">22</td><td class="n tot">8</td><td class="n">2.7×</td><td><div class="bar"><span style="width:36%"></span></div></td><td class="desc">API client、mock server 照指南 v0.7 寫，AI 擅長；RSA-PSS 簽章、HMAC 驗證、去重與 seq 規則要人逐行審</td></tr>
+<tr><td><span class="mid">M2</span>註冊與身份</td><td class="n">7.5</td><td class="n tot">2.5</td><td class="n">3×</td><td><div class="bar"><span style="width:33%"></span></div></td><td class="desc">照既有註冊與 guard pattern 擴充</td></tr>
+<tr><td><span class="mid">M3</span>公司 KYC 改寫與開戶</td><td class="n">17</td><td class="n tot">7</td><td class="n">2.4×</td><td><div class="bar"><span style="width:41%"></span></div></td><td class="desc">KYC 狀態推導分支多、既有公司資料 migration 風險高，人要把關</td></tr>
+<tr><td><span class="mid">M4</span>bond 資料與審核流程</td><td class="n">12</td><td class="n tot">4.5</td><td class="n">2.7×</td><td><div class="bar"><span style="width:38%"></span></div></td><td class="desc">entity、migration、DTO、表單，大多是重複性工作</td></tr>
+<tr><td><span class="mid">M5</span>建立 CMTAT 合約</td><td class="n">8</td><td class="n tot">3.5</td><td class="n">2.3×</td><td><div class="bar"><span style="width:44%"></span></div></td><td class="desc">流程固定；409 與被拒路徑要對 mock 測</td></tr>
+<tr><td><span class="mid">M6</span>認購</td><td class="n">16</td><td class="n tot">5.5</td><td class="n">2.9×</td><td><div class="bar"><span style="width:34%"></span></div></td><td class="desc">APP 頁面佔大宗，AI 加速最多</td></tr>
+<tr><td><span class="mid">M7</span>分配</td><td class="n">12.5</td><td class="n tot">5</td><td class="n">2.5×</td><td><div class="bar"><span style="width:40%"></span></div></td><td class="desc">分配檢查規則要人先寫成驗收條件</td></tr>
+<tr><td><span class="mid">M8</span>交割與逾期註銷</td><td class="n">12.5</td><td class="n tot">5</td><td class="n">2.5×</td><td><div class="bar"><span style="width:40%"></span></div></td><td class="desc">款到才 mint 牽涉金額與鏈上狀態，人審狀態機</td></tr>
+<tr><td><span class="mid">M9</span>登記冊與對帳</td><td class="n">11.5</td><td class="n tot">4.5</td><td class="n">2.6×</td><td><div class="bar"><span style="width:39%"></span></div></td><td class="desc">三方對帳邏輯要人審</td></tr>
+<tr><td><span class="mid">M10</span>存續與到期</td><td class="n">14</td><td class="n tot">5</td><td class="n">2.8×</td><td><div class="bar"><span style="width:36%"></span></div></td><td class="desc">付息只做紀錄與顯示，同原估</td></tr>
+<tr><td><span class="mid">M11</span>通知與權限</td><td class="n">7</td><td class="n tot">2</td><td class="n">3.5×</td><td><div class="bar"><span style="width:29%"></span></div></td><td class="desc">email 模板、權限項，最適合 AI</td></tr>
+<tr><td><span class="mid">M12</span>整合測試與上線</td><td class="n">18</td><td class="n tot">12</td><td class="n">1.5×</td><td><div class="bar"><span style="width:67%"></span></div></td><td class="desc">受 Aegis dev 環境和審核 SLA 限制，AI 幫不上忙；AI 可補回歸測試</td></tr>
+<tr><td><span class="mid">＋</span>AI 流程建置</td><td class="n">—</td><td class="n tot">4</td><td class="n">—</td><td></td><td class="desc">新增項目，見下節第 1 步</td></tr>
+  </tbody>
+  <tfoot><tr><td>首發合計</td><td class="n">161</td><td class="n">約 70</td><td class="n">2.3×</td><td><div class="bar"><span style="width:43%"></span></div></td><td></td></tr></tfoot>
+</table>
+</div>
+<p class="meta">區間：下限 −20%（約 55），上限 +30%（約 90）。上限反映冷錢包 API 欄位調整造成的重工、審查跟不上時的返工，以及 Aegis 環境的等待。</p>
+
+<h2>做法</h2>
+<ol class="phases">
+  <li><strong>先建 AI 的開發環境（3–4 天，最划算的投入）</strong>
+    <ul>
+      <li>修好 jest、用 docker 起本機 Postgres、補齊 <code>.env.main.local</code> 與 <code>ormconfig.json</code> 範本，讓 agent 能自己跑測試與 migration。</li>
+      <li>codegen 改成可讀本機 schema 或 schema 檔。</li>
+      <li>把 <code>digiquick-bond-cmtat-vault-changes.md</code> 拆成每個模組的任務規格，每項附驗收條件（輸入、狀態轉換、錯誤路徑）。</li>
+      <li>每個 repo 補 CLAUDE.md：分層、命名、path alias、<code>GenerateAssetType.md</code> 規則、Next.js 12 / MUI v5 的版本限制。</li>
+    </ul></li>
+  <li><strong>契約先行</strong>：M1 的冷錢包 mock server 照指南 v0.7 先做好，GraphQL schema 先定。之後前後端 agent 依契約並行，不互等。</li>
+  <li><strong>並行開發</strong>：每個模組一個 git worktree、一個 agent，產出程式碼加單元測試；人審過才合併，每個 PR 先跑自動 code review。依原排期的相依順序推進，M6、M7、M8 的前後端可同時做。</li>
+  <li><strong>人必須負責的部分</strong>
+    <ul>
+      <li>簽章與 webhook 驗證、權限（含 <code>asset(id)</code> 漏洞）。</li>
+      <li>款到才 mint、逾期註銷等涉及金額與鏈上狀態的流程。</li>
+      <li>既有資料的 migration。</li>
+      <li>對 Aegis dev 環境的端到端驗證與溝通。</li>
+      <li>改動說明第 10 節的待確認事項：AI 只能先依預設值實作並標記，不能代為決定。</li>
+    </ul></li>
+  <li><strong>回歸安全網</strong>：一開始就讓 AI 為其他 8 種資產補一組基本的 resolver 測試，確保 bond 改動不影響既有資產（已計入 M12）。</li>
+</ol>
+
+<h2>一個月可以做到什麼程度</h2>
+<div class="table-wrap">
+<table>
+  <thead><tr><th>配置</th><th class="n">一個月產能</th><th>可完成</th><th>尚未完成</th></tr></thead>
+  <tbody>
+<tr><td>2 人：1 位後端/架構主審 ＋ 1 位全端兼 QA</td><td class="n">約 40 人天</td><td>M0–M8：冷錢包開戶 → bond 建立 CMTAT → 認購 → 分配 → 款到 mint，主線在 mock server 上跑通</td><td class="desc">M9–M11 部分完成；M12 未開始</td></tr>
+<tr><td>3–4 人</td><td class="n">約 60–80 人天</td><td>M0–M11 在 mock server 上全部完成（含登記冊、存續、到期贖回、通知），開始對 Aegis dev 環境端到端驗證</td><td class="desc">上線取決於 Aegis 環境與審核 SLA，實際多落在第 6–8 週</td></tr>
+  </tbody>
+</table>
+</div>
+<div class="note">人數再增加效益有限：審查速度和模組相依順序才是瓶頸。團隊裡至少要有一位熟悉這幾個 repo 的資深工程師負責主審。</div>
+
+<h2>AI 模式特有的風險</h2>
+<ul>
+  <li><strong>審查跟不上</strong>：AI 一天能產出數個模組，人審不完就會累積技術債與隱性 bug。審查產能決定整體速度。</li>
+  <li><strong>冷錢包 API 仍是草稿</strong>：指南 v0.7 欄位一改，mock server 與 client 都要跟著改。AI 改得快，但每次都要重新驗證。</li>
+  <li><strong>框架版本舊</strong>：Next.js 12、MUI v5、TypeORM 舊版寫法，AI 可能寫成新版 API，要在 CLAUDE.md 明確限制並以 lint、build 把關。</li>
+  <li><strong>安全與金流程式碼</strong>：AI 產出的簽章、權限、交割邏輯看起來正確但可能有邊界錯誤，必須人工逐行審查並有對應測試。</li>
+</ul>
+<div class="note warn">與原估相同的未定事項仍然適用。其中付息與贖回金額如果由 DigiQuick 計算，原估另加 5–8 人天，AI 模式約另加 2–3 人天，計算規則一定要人覆核。</div>
+
+</main>
+</body>
+</html>
